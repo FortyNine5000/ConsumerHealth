@@ -16,7 +16,7 @@ import asyncio
 import datetime
 import sys
 
-import libsql_client
+from ingestion.db import _make_client, TursoClient
 import numpy as np
 import pandas as pd
 import structlog
@@ -61,7 +61,7 @@ BACKFILL_START = "1985-01-01"  # fetch a bit before 1990 so YoY transforms are m
 
 
 async def _score_all_indicators(
-    client: libsql_client.Client,
+    client: TursoClient,
     indicators: list[dict],
 ) -> pd.DataFrame:
     """
@@ -177,7 +177,7 @@ def _get_transform(slug: str):
 
 
 async def _compute_subscores_and_headline(
-    client: libsql_client.Client,
+    client: TursoClient,
     all_scores_df: pd.DataFrame,
 ) -> None:
     """Aggregate indicator scores into sub-scores and headline for all dates."""
@@ -250,10 +250,7 @@ async def run() -> None:
     started_at = datetime.datetime.utcnow().isoformat() + "Z"
     log.info("backfill.start", backfill_start=BACKFILL_START)
 
-    client = libsql_client.create_client(
-        url=settings.turso_database_url,
-        auth_token=settings.turso_auth_token,
-    )
+    client = _make_client()
 
     try:
         # 1. Bootstrap schema and seed indicators

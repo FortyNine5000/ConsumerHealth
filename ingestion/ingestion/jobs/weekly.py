@@ -16,7 +16,7 @@ import asyncio
 import datetime
 
 import httpx
-import libsql_client
+from ingestion.db import _make_client, TursoClient
 import structlog
 
 from ingestion.config import settings
@@ -43,10 +43,7 @@ async def run() -> None:
     started_at = datetime.datetime.utcnow().isoformat() + "Z"
     log.info("weekly.start")
 
-    client = libsql_client.create_client(
-        url=settings.turso_database_url,
-        auth_token=settings.turso_auth_token,
-    )
+    client = _make_client()
 
     try:
         await bootstrap(client)
