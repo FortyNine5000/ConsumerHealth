@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import json
+import math
 import os
 import pathlib
 from typing import Any, NamedTuple
@@ -40,6 +41,8 @@ def _encode_value(v: Any) -> dict:
     if isinstance(v, int):
         return {"type": "integer", "value": str(v)}
     if isinstance(v, float):
+        if math.isnan(v) or math.isinf(v):
+            return {"type": "null"}
         return {"type": "float", "value": v}
     return {"type": "text", "value": str(v)}
 
