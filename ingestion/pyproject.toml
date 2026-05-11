@@ -16,8 +16,8 @@ dependencies = [
     "pandas>=2.0.0",
     "numpy>=1.24.0",
 
-    # Database (Turso / libSQL — async-native)
-    "libsql-client>=0.3.1",
+    # Database (Turso HTTP API — replaces libsql-client WebSocket library)
+    # httpx already listed above handles all Turso /v2/pipeline requests
 
     # Validation & config
     "pydantic>=2.0.0",
