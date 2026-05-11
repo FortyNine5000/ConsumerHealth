@@ -135,13 +135,35 @@ def _make_client() -> TursoClient:
     return TursoClient(url=_turso_url(), token=_turso_token())
 
 
+def _split_sql(sql: str) -> list[str]:
+    """Split SQL into statements, ignoring semicolons inside -- comments."""
+    statements = []
+    current: list[str] = []
+    for line in sql.splitlines():
+        stripped = line.strip()
+        # Remove inline comment suffix for semicolon detection only
+        comment_pos = stripped.find("--")
+        sql_part = stripped[:comment_pos] if comment_pos >= 0 else stripped
+        current.append(line)
+        if sql_part.rstrip().endswith(";"):
+            stmt = "\n".join(current).strip().rstrip(";").strip()
+            # Drop pure-comment lines from statement
+            clean_lines = [l for l in stmt.splitlines()
+                           if l.strip() and not l.strip().startswith("--")]
+            clean = "\n".join(clean_lines).strip()
+            if clean:
+                statements.append(clean)
+            current = []
+    return statements
+
+
 async def bootstrap(client: TursoClient) -> None:
     """Execute schema.sql against the database (idempotent — uses IF NOT EXISTS / OR IGNORE)."""
     sql = SCHEMA_PATH.read_text()
-    statements = [s.strip() for s in sql.split(";") if s.strip()]
+    statements = _split_sql(sql)
     for stmt in statements:
         await client.execute(stmt)
-    log.info("db.bootstrap completed", schema=str(SCHEMA_PATH))
+    log.info("db.bootstrap completed", schema=str(SCHEMA_PATH), statements=len(statements))
 
 
 async def get_source_id(client: TursoClient, slug: str) -> int:
