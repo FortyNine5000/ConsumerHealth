@@ -85,7 +85,8 @@ class TursoClient:
             ]
         }
         resp = await self._http.post(self._url, headers=self._headers, json=payload)
-        resp.raise_for_status()
+        if not resp.is_success:
+            raise RuntimeError(f"Turso HTTP {resp.status_code}: {resp.text[:2000]}")
         data = resp.json()
         result = data["results"][0]
         if result["type"] == "error":
@@ -121,7 +122,8 @@ class TursoClient:
         requests.append({"type": "close"})
         payload = {"requests": requests}
         resp = await self._http.post(self._url, headers=self._headers, json=payload)
-        resp.raise_for_status()
+        if not resp.is_success:
+            raise RuntimeError(f"Turso HTTP {resp.status_code}: {resp.text[:2000]}")
         data = resp.json()
         for i, result in enumerate(data["results"][:-1]):
             if result["type"] == "error":
