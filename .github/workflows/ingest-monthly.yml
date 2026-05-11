@@ -1,0 +1,36 @@
+name: Ingest Monthly
+
+on:
+  schedule:
+    # 5th of each month at 9:15am ET — after most monthly data releases
+    # (CPI ~mid-month, Employment Situation 1st Friday, PCE last business day)
+    # Run daily through the 10th and let the job decide if new data is available
+    - cron: '15 14 5-10 * *'
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: ingestion/pyproject.toml
+
+      - name: Install ingestion package
+        run: pip install -e "ingestion/"
+
+      - name: Run monthly ingestion (FRED monthly + BLS + BEA + scoring)
+        run: ingest-monthly
+        env:
+          FRED_API_KEY:                ${{ secrets.FRED_API_KEY }}
+          BLS_API_KEY:                 ${{ secrets.BLS_API_KEY }}
+          BEA_API_KEY:                 ${{ secrets.BEA_API_KEY }}
+          TURSO_DATABASE_URL:          ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN:            ${{ secrets.TURSO_AUTH_TOKEN }}
+          CLOUDFLARE_DEPLOY_HOOK_URL:  ${{ secrets.CLOUDFLARE_DEPLOY_HOOK_URL }}

@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.cover
+
+# Secrets / Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# Node / Astro
+node_modules/
+apps/web/node_modules/
+apps/web/dist/
+apps/web/.astro/
+apps/web/.wrangler/
+.npm/
+
+# Database (local dev copies)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Cloudflare / Wrangler
+.wrangler/
+
+# Turso local
+.turso/
+
+# Test artifacts
+.hypothesis/

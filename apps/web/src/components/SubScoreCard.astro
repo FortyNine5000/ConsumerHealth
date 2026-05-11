@@ -1,0 +1,100 @@
+---
+import type { SubScore } from '../lib/db';
+import { scoreToBand, formatDate } from '../lib/scoring';
+
+interface Props {
+  data: SubScore;
+}
+
+const { data } = Astro.props;
+const band = scoreToBand(data.score);
+const scoreDate = formatDate(data.score_date);
+---
+
+<a
+  href={`/subscores/${data.slug}`}
+  class="block bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md hover:border-gray-200 transition-all group"
+>
+  <div class="flex items-start justify-between mb-3">
+    <div>
+      <div class="text-sm font-medium text-gray-700 group-hover:text-compass-navy transition-colors">
+        {data.label}
+      </div>
+      <div class="text-xs text-gray-400 mt-0.5">{scoreDate}</div>
+    </div>
+    <div
+      class="text-2xl font-bold tabular-nums"
+      style={`color: ${band.color}`}
+    >
+      {data.score.toFixed(0)}
+    </div>
+  </div>
+
+  <!-- Sparkline placeholder — hydrated client-side -->
+  <div
+    class="sparkline-container h-10 w-full"
+    data-sparkline={JSON.stringify(data.sparkline)}
+    data-color={band.color}
+  />
+
+  <div
+    class="mt-2 text-xs font-medium"
+    style={`color: ${band.color}`}
+  >
+    {band.label}
+  </div>
+</a>
+
+<script>
+  // Lightweight inline sparkline renderer using canvas
+  document.querySelectorAll<HTMLElement>('.sparkline-container').forEach((el) => {
+    const raw = el.dataset.sparkline;
+    const color = el.dataset.color ?? '#0d9488';
+    if (!raw) return;
+    const data: number[] = JSON.parse(raw);
+    if (data.length < 2) return;
+
+    const canvas = document.createElement('canvas');
+    const dpr = window.devicePixelRatio || 1;
+    const w = el.offsetWidth || 200;
+    const h = 40;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+    canvas.style.display = 'block';
+    el.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
+
+    const min = Math.min(...data, 0);
+    const max = Math.max(...data, 100);
+    const range = max - min || 1;
+
+    const pts = data.map((v, i) => ({
+      x: (i / (data.length - 1)) * w,
+      y: h - ((v - min) / range) * (h - 4) - 2,
+    }));
+
+    // Fill
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, h);
+    pts.forEach((p) => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(pts[pts.length - 1].x, h);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, color + '33');
+    grad.addColorStop(1, color + '05');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+  });
+</script>

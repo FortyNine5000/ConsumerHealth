@@ -1,0 +1,85 @@
+---
+import type { SubScore } from '../lib/db';
+import type { QuoteRow } from '../lib/db';
+import { scoreToBand } from '../lib/scoring';
+
+interface Props {
+  subscores: SubScore[];
+  quotes: QuoteRow[];
+}
+
+const { subscores, quotes } = Astro.props;
+
+// Find stressed or declining sub-scores
+const stressedSubscores = subscores
+  .filter((s) => s.score < 50)
+  .sort((a, b) => a.score - b.score)
+  .slice(0, 3);
+
+// Count positive vs negative quotes
+const positiveQuotes = quotes.filter((q) => q.sentiment_score >= 0.3);
+const negativeQuotes = quotes.filter((q) => q.sentiment_score <= -0.3);
+const contradictors = quotes.filter((q) => q.agrees_with_dashboard === 0);
+
+// Show the gap only if meaningful
+const hasMeaningfulGap =
+  positiveQuotes.length > 0 && stressedSubscores.length > 0 && contradictors.length > 0;
+
+const recentQuotes = quotes.slice(0, 6);
+---
+
+<div class="bg-compass-navy text-white rounded-2xl p-6">
+  <div class="flex items-center gap-2 mb-4">
+    <svg class="w-5 h-5 text-compass-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+    </svg>
+    <h2 class="font-semibold text-lg">Data vs. Narrative</h2>
+  </div>
+
+  {hasMeaningfulGap ? (
+    <div class="mb-5 p-4 bg-white/10 rounded-xl">
+      <p class="text-sm leading-relaxed text-gray-200">
+        <span class="font-semibold text-white">{positiveQuotes.length} executives</span> used positive language about the consumer in recent earnings calls —
+        but <span class="font-semibold text-compass-teal">{stressedSubscores.map(s => s.label).join(' and ')}</span> {stressedSubscores.length === 1 ? 'is' : 'are'} currently scoring below 50.
+        {contradictors.length > 0 && (
+          <span> {contradictors.length} {contradictors.length === 1 ? 'quote contradicts' : 'quotes contradict'} the dashboard signal.</span>
+        )}
+      </p>
+    </div>
+  ) : quotes.length === 0 ? (
+    <div class="mb-5 p-4 bg-white/10 rounded-xl text-sm text-gray-300">
+      Earnings quote tracking will appear here once the SEC EDGAR ingestion pipeline runs.
+    </div>
+  ) : null}
+
+  <!-- Recent quotes -->
+  {recentQuotes.length > 0 && (
+    <div class="space-y-3">
+      {recentQuotes.map((quote) => {
+        const sentimentColor =
+          quote.sentiment_score >= 0.3 ? 'border-green-400' :
+          quote.sentiment_score <= -0.3 ? 'border-red-400' :
+          'border-gray-400';
+        return (
+          <div class={`border-l-2 pl-3 ${sentimentColor}`}>
+            <div class="text-xs text-gray-400 mb-1">
+              <span class="font-semibold text-gray-300">{quote.ticker}</span>
+              {' · '}{quote.quarter}
+              {quote.agrees_with_dashboard === 0 && (
+                <span class="ml-2 text-red-400">↓ contradicts data</span>
+              )}
+            </div>
+            <p class="text-xs text-gray-200 leading-relaxed line-clamp-2">"{quote.quote_text}"</p>
+          </div>
+        );
+      })}
+    </div>
+  )}
+
+  <a href="/quotes" class="mt-4 inline-flex items-center gap-1 text-compass-teal text-sm hover:text-teal-300 transition-colors">
+    Browse all quotes
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M5 12h14M12 5l7 7-7 7"/>
+    </svg>
+  </a>
+</div>

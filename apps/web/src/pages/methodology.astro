@@ -1,0 +1,170 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Methodology"
+  description="How The Consumer Compass calculates its 0–100 headline score — indicator selection, percentile transforms, weights, and recession back-test results."
+>
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 prose prose-slate max-w-none">
+    <h1 class="text-3xl font-bold text-compass-navy mb-2">Methodology</h1>
+    <p class="text-gray-500 text-sm mb-8">Last updated May 2025 · <a href="https://github.com/fortynine5000/consumerhealth" class="text-compass-teal hover:underline" target="_blank" rel="noopener">Source on GitHub</a></p>
+
+    <!-- Overview -->
+    <section class="mb-10">
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Overview</h2>
+      <p class="text-gray-700 leading-relaxed">
+        The Consumer Compass headline score is a weighted composite of 7 sub-scores covering ~30 indicators sourced entirely from free U.S. government APIs (FRED, BLS, BEA, NY Fed, SEC EDGAR). Each indicator is converted to a 0–100 score using an <strong>expanding-window percentile rank</strong> — its current value is ranked against all historical values back to 1990. This eliminates look-ahead bias and ensures the score is directly comparable across time.
+      </p>
+    </section>
+
+    <!-- Percentile scoring -->
+    <section class="mb-10">
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Percentile Transform</h2>
+      <p class="text-gray-700 leading-relaxed mb-4">
+        For each indicator at time <em>t</em>, the score is:
+      </p>
+      <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 font-mono text-sm text-gray-700 mb-4 overflow-x-auto">
+        <div>rank(value_t) / N_t × 100</div>
+        <div class="text-gray-400 mt-1">where N_t = count of all observations from history[0] through history[t]</div>
+      </div>
+      <ul class="list-disc list-inside text-gray-700 space-y-2 text-sm leading-relaxed">
+        <li><strong>Higher-is-better indicators</strong> (e.g., payrolls, savings rate): higher percentile = higher score.</li>
+        <li><strong>Lower-is-better indicators</strong> (e.g., unemployment, delinquency): percentile is inverted (100 − percentile).</li>
+        <li><strong>CPI indicators</strong>: scored by <em>proximity to 2%</em> — the absolute distance |YoY − 2%| is ranked; lower distance scores higher.</li>
+        <li><strong>Context-only indicators</strong> (Manheim MUVVI): charted for context but excluded from scoring.</li>
+      </ul>
+    </section>
+
+    <!-- Transforms -->
+    <section class="mb-10">
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Pre-Score Transforms</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border border-gray-200 rounded-lg">
+          <thead>
+            <tr class="bg-gray-50">
+              <th class="text-left p-3 font-semibold text-gray-700">Indicator</th>
+              <th class="text-left p-3 font-semibold text-gray-700">Transform</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {[
+              ['Nonfarm Payrolls (PAYEMS)', 'MoM change → 3-month rolling average'],
+              ['Real Hourly Earnings, DPI, Retail Sales, PCE', 'Year-over-year % change'],
+              ['PCE (spending momentum)', '3-month annualized rate of change'],
+              ['Net Worth / DPI', 'BOGZ1FL192090005Q ÷ DSPI (both quarterly)'],
+              ['CPI (all variants)', '|YoY − 2.0%| distance → scored on lower distance'],
+              ['TSA Throughput', 'vs. 2019 baseline (pre-pandemic normalization)'],
+              ['All others', 'Raw level (already stationary or ratio)'],
+            ].map(([ind, xform]) => (
+              <tr>
+                <td class="p-3 text-gray-700">{ind}</td>
+                <td class="p-3 text-gray-500 font-mono text-xs">{xform}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Smoothing -->
+    <section class="mb-10">
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Smoothing</h2>
+      <p class="text-gray-700 leading-relaxed text-sm">
+        After scoring, each indicator's 0–100 series is smoothed with a rolling average before sub-score aggregation:
+      </p>
+      <ul class="list-disc list-inside text-gray-700 space-y-1 text-sm mt-2">
+        <li>Monthly indicators: 3-month centered rolling average</li>
+        <li>Weekly indicators: 4-week rolling average</li>
+        <li>Daily indicators: 30-day rolling average</li>
+        <li>Quarterly indicators: no smoothing applied</li>
+      </ul>
+    </section>
+
+    <!-- Sub-score weights -->
+    <section class="mb-10">
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Sub-Score Weights</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border border-gray-200 rounded-lg">
+          <thead>
+            <tr class="bg-gray-50">
+              <th class="text-left p-3 font-semibold text-gray-700">Sub-Score</th>
+              <th class="text-left p-3 font-semibold text-gray-700">Weight</th>
+              <th class="text-left p-3 font-semibold text-gray-700">Indicators</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {[
+              ['Labor & Income', '20%', 'UNRATE, PAYEMS, IC4WSA, CCSA, Real AHE YoY'],
+              ['Credit Stress', '20%', 'CC delinquency, Consumer loan delinquency, Charge-offs, NY Fed serious delinq transition, SLOOS tightening'],
+              ['Balance Sheet', '15%', 'Personal saving rate, Real DPI YoY, Debt service ratio, Net Worth/DPI'],
+              ['Spending & Demand', '15%', 'Real PCE 3-mo ann., Real retail sales YoY, TSA throughput vs 2019, Real PCE food svcs YoY'],
+              ['Sentiment', '10%', 'UMich Consumer Sentiment, OECD Consumer Confidence, NY Fed SCE missing payment prob.'],
+              ['Inflation', '10%', 'Headline CPI, Core CPI, Shelter CPI (all proximity to 2%), EIA gas prices'],
+              ['Big Ticket', '10%', '30yr mortgage rate, Auto loan rate (72mo), CC interest rate, Housing affordability index'],
+            ].map(([sub, weight, indicators]) => (
+              <tr>
+                <td class="p-3 font-medium text-compass-navy">{sub}</td>
+                <td class="p-3 text-compass-teal font-semibold">{weight}</td>
+                <td class="p-3 text-gray-500 text-xs">{indicators}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">Within each sub-score, indicators are equally weighted. Sub-scores are renormalized if an indicator has no data.</p>
+    </section>
+
+    <!-- Recession back-test -->
+    <section class="mb-10">
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Recession Back-Test</h2>
+      <p class="text-gray-700 text-sm leading-relaxed mb-4">
+        The scoring engine validates that the headline score drops ≥15 points by the NBER-designated recession peak (start of recession). Expected behavior:
+      </p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border border-gray-200 rounded-lg">
+          <thead>
+            <tr class="bg-gray-50">
+              <th class="text-left p-3 font-semibold text-gray-700">Recession</th>
+              <th class="text-left p-3 font-semibold text-gray-700">NBER Peak</th>
+              <th class="text-left p-3 font-semibold text-gray-700">Expected Score Drop</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {[
+              ['1990–91', 'Jul 1990', '≥15 pts from pre-recession baseline'],
+              ['2001', 'Mar 2001', '≥15 pts from pre-recession baseline'],
+              ['2007–09', 'Dec 2007', '≥15 pts (score floors near 20 in 2009)'],
+              ['2020 COVID', 'Feb 2020', '≥15 pts (score craters by Apr 2020)'],
+            ].map(([rec, peak, drop]) => (
+              <tr>
+                <td class="p-3 text-gray-700">{rec}</td>
+                <td class="p-3 text-gray-500">{peak}</td>
+                <td class="p-3 text-gray-500 text-xs">{drop}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Data sources and legal -->
+    <section class="mb-10">
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Data Sources & Legal</h2>
+      <ul class="list-disc list-inside text-gray-700 space-y-2 text-sm leading-relaxed">
+        <li><strong>FRED</strong>: Federal Reserve Bank of St. Louis. Free API, attribution required.</li>
+        <li><strong>BLS</strong>: Bureau of Labor Statistics. Free API, public domain.</li>
+        <li><strong>BEA</strong>: Bureau of Economic Analysis. Free API, public domain.</li>
+        <li><strong>NY Fed HHDC</strong>: Household Debt and Credit. Free download, public data.</li>
+        <li><strong>NY Fed SCE</strong>: Survey of Consumer Expectations. Free download.</li>
+        <li><strong>EIA</strong>: U.S. Energy Information Administration. Free API, public domain.</li>
+        <li><strong>SEC EDGAR</strong>: 8-K Exhibit 99 earnings transcripts only. U.S. government system, public domain.</li>
+        <li><strong>Manheim MUVVI</strong>: Used for context only (not scored). Chart displays index level.</li>
+        <li><strong>Conference Board CCI</strong>: Redistribution restricted — not stored. Linked externally only.</li>
+      </ul>
+      <p class="text-xs text-gray-400 mt-4">
+        The Consumer Compass is not investment advice. Scores are statistical computations, not editorial recommendations. Source code is MIT-licensed.
+      </p>
+    </section>
+  </div>
+</BaseLayout>

@@ -1,0 +1,64 @@
+---
+import type { QuoteRow } from '../lib/db';
+
+interface Props {
+  quote: QuoteRow;
+  compact?: boolean;
+}
+
+const { quote, compact = false } = Astro.props;
+
+const sentimentColor =
+  quote.sentiment_score >= 0.3 ? 'text-green-700 bg-green-50' :
+  quote.sentiment_score <= -0.3 ? 'text-red-700 bg-red-50' :
+  'text-gray-600 bg-gray-100';
+
+const sentimentLabel =
+  quote.sentiment_score >= 0.3 ? 'Positive' :
+  quote.sentiment_score <= -0.3 ? 'Negative' :
+  'Neutral';
+
+const agreesColor =
+  quote.agrees_with_dashboard === 1 ? 'text-green-700' :
+  quote.agrees_with_dashboard === 0 ? 'text-red-700' :
+  'text-gray-400';
+
+const agreesLabel =
+  quote.agrees_with_dashboard === 1 ? '↑ Aligns with data' :
+  quote.agrees_with_dashboard === 0 ? '↓ Contradicts data' :
+  '';
+
+const quarter = quote.quarter;
+---
+
+<div class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+  <div class="flex items-center justify-between mb-3 gap-3">
+    <div class="flex items-center gap-2 min-w-0">
+      <span class="text-sm font-bold text-compass-navy shrink-0">{quote.ticker}</span>
+      {!compact && (
+        <span class="text-xs text-gray-400 truncate">{quote.company_name}</span>
+      )}
+      <span class="text-xs text-gray-400 shrink-0">{quarter}</span>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <span class={`text-xs font-medium px-2 py-0.5 rounded-full ${sentimentColor}`}>
+        {sentimentLabel}
+      </span>
+    </div>
+  </div>
+
+  <blockquote class={`text-gray-700 leading-relaxed border-l-2 border-compass-teal pl-3 ${compact ? 'text-xs line-clamp-3' : 'text-sm'}`}>
+    "{quote.quote_text}"
+  </blockquote>
+
+  {(quote.category.length > 0 || agreesLabel) && (
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      {quote.category.slice(0, 3).map((tag: string) => (
+        <span class="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">{tag}</span>
+      ))}
+      {agreesLabel && (
+        <span class={`text-xs font-medium ml-auto ${agreesColor}`}>{agreesLabel}</span>
+      )}
+    </div>
+  )}
+</div>

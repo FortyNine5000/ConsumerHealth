@@ -1,0 +1,116 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+  ogImage?: string;
+  noIndex?: boolean;
+}
+
+const {
+  title,
+  description = 'Free public U.S. consumer financial health dashboard. 0–100 headline score, 7 sub-scores, 30 indicators — all sourced from free government data.',
+  ogImage = '/og-default.png',
+  noIndex = false,
+} = Astro.props;
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const fullTitle = title === 'The Consumer Compass' ? title : `${title} · The Consumer Compass`;
+---
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="canonical" href={canonicalURL} />
+
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    {noIndex && <meta name="robots" content="noindex" />}
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL(ogImage, Astro.site)} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={new URL(ogImage, Astro.site)} />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+  </head>
+  <body class="bg-gray-50 text-gray-900 font-sans antialiased">
+    <header class="bg-compass-navy text-white">
+      <nav class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-2 font-semibold text-lg tracking-tight hover:opacity-90 transition-opacity">
+          <svg class="w-6 h-6 text-compass-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 2 L14.4 9.6 L22 12 L14.4 14.4 L12 22 L9.6 14.4 L2 12 L9.6 9.6 Z"/>
+          </svg>
+          Consumer Compass
+        </a>
+        <div class="hidden sm:flex items-center gap-6 text-sm text-gray-300">
+          <a href="/indicators" class="hover:text-white transition-colors">Indicators</a>
+          <a href="/quotes" class="hover:text-white transition-colors">Quotes</a>
+          <a href="/methodology" class="hover:text-white transition-colors">Methodology</a>
+        </div>
+        <!-- Mobile menu placeholder -->
+        <button class="sm:hidden text-gray-300 hover:text-white" aria-label="Menu">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </nav>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="bg-compass-navy text-gray-400 mt-16">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 text-sm">
+          <div>
+            <div class="text-white font-semibold mb-2">The Consumer Compass</div>
+            <p class="leading-relaxed">
+              A free, independent dashboard tracking U.S. consumer financial health from public government data.
+            </p>
+          </div>
+          <div>
+            <div class="text-white font-semibold mb-2">Data Sources</div>
+            <ul class="space-y-1">
+              <li><a href="https://fred.stlouisfed.org" class="hover:text-white transition-colors" target="_blank" rel="noopener">FRED (St. Louis Fed)</a></li>
+              <li><a href="https://www.bls.gov" class="hover:text-white transition-colors" target="_blank" rel="noopener">BLS</a></li>
+              <li><a href="https://www.bea.gov" class="hover:text-white transition-colors" target="_blank" rel="noopener">BEA</a></li>
+              <li><a href="https://www.newyorkfed.org/microeconomics/hhdc" class="hover:text-white transition-colors" target="_blank" rel="noopener">NY Fed HHDC</a></li>
+              <li><a href="https://www.sec.gov/cgi-bin/browse-edgar" class="hover:text-white transition-colors" target="_blank" rel="noopener">SEC EDGAR</a></li>
+            </ul>
+          </div>
+          <div>
+            <div class="text-white font-semibold mb-2">About</div>
+            <ul class="space-y-1">
+              <li><a href="/methodology" class="hover:text-white transition-colors">Methodology</a></li>
+              <li><a href="https://github.com/fortynine5000/consumerhealth" class="hover:text-white transition-colors" target="_blank" rel="noopener">GitHub</a></li>
+            </ul>
+            <p class="mt-4 text-xs leading-relaxed">
+              Not investment advice. All data sourced from free U.S. government APIs. Scores are statistical, not editorial.
+            </p>
+          </div>
+        </div>
+        <div class="border-t border-white/10 mt-8 pt-6 text-xs text-center">
+          © {new Date().getFullYear()} The Consumer Compass · MIT License · Data updated automatically via GitHub Actions
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,94 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getAllIndicators } from '../../lib/db';
+import { scoreToBand, SUBSCORE_LABELS } from '../../lib/scoring';
+
+let indicators = [];
+try {
+  indicators = await getAllIndicators();
+} catch (e) {
+  // DB not yet populated
+}
+
+const scored = indicators.filter((i) => i.is_scored === 1);
+const subscores = [...new Set(scored.map((i) => i.subscore))];
+---
+
+<BaseLayout
+  title="All Indicators"
+  description="Browse all 30+ U.S. consumer health indicators tracked by The Consumer Compass — from unemployment to credit delinquency to gas prices."
+>
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-compass-navy">Indicators</h1>
+      <p class="text-gray-500 mt-1 text-sm">
+        {scored.length} scored indicators across 7 sub-scores. Click any indicator to see its full history and methodology note.
+      </p>
+    </div>
+
+    {indicators.length === 0 ? (
+      <div class="bg-gray-100 rounded-xl p-12 text-center text-gray-400">
+        <p class="text-lg mb-2">No data yet.</p>
+        <p class="text-sm">Run <code class="font-mono bg-gray-200 px-1 rounded">ingest-backfill</code> to populate indicators.</p>
+      </div>
+    ) : (
+      <div class="space-y-10">
+        {subscores.map((subscore) => {
+          const group = scored.filter((i) => i.subscore === subscore);
+          return (
+            <section>
+              <h2 class="text-lg font-semibold text-compass-navy mb-4 flex items-center gap-2">
+                <a href={`/subscores/${subscore}`} class="hover:text-compass-teal transition-colors">
+                  {SUBSCORE_LABELS[subscore] ?? subscore}
+                </a>
+                <span class="text-xs font-normal text-gray-400">{group.length} indicators</span>
+              </h2>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {group.map((ind) => {
+                  const band = ind.latest_score != null ? scoreToBand(ind.latest_score) : null;
+                  return (
+                    <a
+                      href={`/indicators/${ind.slug}`}
+                      class="bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md hover:border-gray-200 transition-all"
+                    >
+                      <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                          <div class="font-medium text-sm text-gray-800 leading-snug">{ind.label}</div>
+                          <div class="text-xs text-gray-400 mt-0.5 font-mono">{ind.series_id}</div>
+                        </div>
+                        {band ? (
+                          <div
+                            class="text-xl font-bold tabular-nums shrink-0"
+                            style={`color: ${band.color}`}
+                          >
+                            {ind.latest_score!.toFixed(0)}
+                          </div>
+                        ) : (
+                          <div class="text-xl font-bold text-gray-300 shrink-0">—</div>
+                        )}
+                      </div>
+                      <div class="mt-2 flex items-center gap-2">
+                        <span class="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">{ind.frequency}</span>
+                        {ind.scoring_type === 'proximity_2pct' && (
+                          <span class="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">proximity 2%</span>
+                        )}
+                        {band && (
+                          <span
+                            class="text-xs font-medium ml-auto"
+                            style={`color: ${band.color}`}
+                          >
+                            {band.label}
+                          </span>
+                        )}
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</BaseLayout>

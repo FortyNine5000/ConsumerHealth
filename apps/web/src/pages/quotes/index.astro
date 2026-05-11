@@ -1,0 +1,119 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import QuoteCard from '../../components/QuoteCard.astro';
+import { getAllQuotes } from '../../lib/db';
+
+let quotes = [];
+try {
+  quotes = await getAllQuotes();
+} catch (e) {}
+
+const sectors = [...new Set(quotes.map((q) => q.sector).filter(Boolean))].sort();
+const tickers = [...new Set(quotes.map((q) => q.ticker))].sort();
+---
+
+<BaseLayout
+  title="Earnings Quotes"
+  description="Corporate earnings call quotes about the U.S. consumer — sourced from SEC EDGAR 8-K filings. Compare what companies say vs. what the data shows."
+>
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-compass-navy">Earnings Quotes</h1>
+      <p class="text-gray-500 mt-1 text-sm max-w-2xl">
+        Excerpts from SEC 8-K filings (Exhibit 99) across {tickers.length} tracked companies. Classified by Claude AI. Compare corporate narratives with the consumer data.
+      </p>
+    </div>
+
+    {quotes.length === 0 ? (
+      <div class="bg-gray-50 rounded-2xl border border-gray-200 p-12 text-center">
+        <div class="text-4xl mb-4">📋</div>
+        <h2 class="text-lg font-semibold text-gray-700 mb-2">No quotes yet</h2>
+        <p class="text-gray-400 text-sm max-w-sm mx-auto">
+          The earnings quote tracker will populate after the SEC EDGAR ingestion pipeline runs. Quotes are extracted automatically from 8-K Exhibit 99 filings.
+        </p>
+      </div>
+    ) : (
+      <>
+        <!-- Filters (client-side) -->
+        <div class="flex flex-wrap gap-3 mb-6" id="quote-filters">
+          <select id="filter-sector" class="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-compass-teal">
+            <option value="">All sectors</option>
+            {sectors.map((s) => <option value={s}>{s}</option>)}
+          </select>
+          <select id="filter-sentiment" class="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-compass-teal">
+            <option value="">All sentiment</option>
+            <option value="positive">Positive</option>
+            <option value="negative">Negative</option>
+            <option value="neutral">Neutral</option>
+          </select>
+          <select id="filter-signal" class="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-compass-teal">
+            <option value="">All signals</option>
+            <option value="contradicts">Contradicts data</option>
+            <option value="aligns">Aligns with data</option>
+          </select>
+          <input
+            id="filter-search"
+            type="search"
+            placeholder="Search quotes..."
+            class="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-compass-teal flex-1 min-w-48"
+          />
+        </div>
+
+        <!-- Quote grid -->
+        <div id="quote-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {quotes.map((q) => (
+            <div
+              class="quote-item"
+              data-sector={q.sector}
+              data-sentiment={q.sentiment_score >= 0.3 ? 'positive' : q.sentiment_score <= -0.3 ? 'negative' : 'neutral'}
+              data-signal={q.agrees_with_dashboard === 0 ? 'contradicts' : q.agrees_with_dashboard === 1 ? 'aligns' : ''}
+              data-text={q.quote_text.toLowerCase()}
+            >
+              <QuoteCard quote={q} />
+            </div>
+          ))}
+        </div>
+
+        <div id="no-results" class="hidden text-center py-12 text-gray-400">
+          No quotes match your filters.
+        </div>
+      </>
+    )}
+  </div>
+</BaseLayout>
+
+<script>
+  const sectorEl = document.getElementById('filter-sector') as HTMLSelectElement | null;
+  const sentimentEl = document.getElementById('filter-sentiment') as HTMLSelectElement | null;
+  const signalEl = document.getElementById('filter-signal') as HTMLSelectElement | null;
+  const searchEl = document.getElementById('filter-search') as HTMLInputElement | null;
+  const noResults = document.getElementById('no-results');
+
+  function applyFilters() {
+    const sector = sectorEl?.value ?? '';
+    const sentiment = sentimentEl?.value ?? '';
+    const signal = signalEl?.value ?? '';
+    const query = (searchEl?.value ?? '').toLowerCase();
+
+    const items = document.querySelectorAll<HTMLElement>('.quote-item');
+    let visible = 0;
+
+    items.forEach((item) => {
+      const match =
+        (!sector || item.dataset.sector === sector) &&
+        (!sentiment || item.dataset.sentiment === sentiment) &&
+        (!signal || item.dataset.signal === signal) &&
+        (!query || (item.dataset.text ?? '').includes(query));
+
+      item.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+
+    if (noResults) noResults.classList.toggle('hidden', visible > 0);
+  }
+
+  sectorEl?.addEventListener('change', applyFilters);
+  sentimentEl?.addEventListener('change', applyFilters);
+  signalEl?.addEventListener('change', applyFilters);
+  searchEl?.addEventListener('input', applyFilters);
+</script>

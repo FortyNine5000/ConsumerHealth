@@ -1,0 +1,31 @@
+name: Ingest Daily
+
+on:
+  schedule:
+    # 9:15am ET weekdays (UTC-5 in winter, UTC-4 in summer — use 14:15 UTC)
+    - cron: '15 14 * * 1-5'
+  workflow_dispatch:  # allow manual trigger
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: ingestion/pyproject.toml
+
+      - name: Install ingestion package
+        run: pip install -e "ingestion/"
+
+      - name: Run daily ingestion (TSA throughput)
+        run: ingest-daily
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN:   ${{ secrets.TURSO_AUTH_TOKEN }}
+          SEC_USER_AGENT:     ${{ secrets.SEC_USER_AGENT }}

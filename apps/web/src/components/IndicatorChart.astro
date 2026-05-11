@@ -1,0 +1,120 @@
+---
+import type { IndicatorHistory } from '../lib/db';
+import type { IndicatorRow } from '../lib/db';
+
+interface Props {
+  indicator: IndicatorRow;
+  history: IndicatorHistory[];
+  showRawValue?: boolean;
+}
+
+const { indicator, history, showRawValue = true } = Astro.props;
+
+const chartData = JSON.stringify(
+  history.map((h) => ({
+    date: h.score_date,
+    score: h.smoothed_score ?? h.score,
+    rawValue: h.raw_value,
+    percentile: h.percentile_rank,
+  }))
+);
+---
+
+<div
+  class="indicator-chart-root"
+  data-chart={chartData}
+  data-label={indicator.label}
+  data-unit={indicator.unit ?? ''}
+  data-show-raw={showRawValue ? '1' : '0'}
+  style="height: 320px; width: 100%;"
+/>
+
+<script>
+  import * as echarts from 'echarts';
+  import { buildRecessionMarkAreas } from '../lib/echarts';
+
+  document.querySelectorAll<HTMLElement>('.indicator-chart-root').forEach((el) => {
+    const rawData = JSON.parse(el.dataset.chart ?? '[]') as {
+      date: string; score: number | null; rawValue: number | null; percentile: number | null;
+    }[];
+    const label = el.dataset.label ?? '';
+    const unit = el.dataset.unit ?? '';
+    const showRaw = el.dataset.showRaw === '1';
+
+    const chart = echarts.init(el, null, { renderer: 'svg' });
+
+    const dates = rawData.map((d) => d.date.slice(0, 7));
+    const scores = rawData.map((d) => d.score);
+    const rawValues = rawData.map((d) => d.rawValue);
+
+    const option: echarts.EChartsOption = {
+      backgroundColor: 'transparent',
+      grid: { top: 36, right: 16, bottom: 40, left: 56, containLabel: false },
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          const p = Array.isArray(params) ? params[0] : params;
+          const d = rawData[p.dataIndex];
+          const rv = d?.rawValue != null ? `<br/>${unit ? unit + ': ' : ''}${d.rawValue.toFixed(2)}` : '';
+          return `${p.axisValue}<br/>Score: <b>${p.value?.toFixed(1) ?? '—'}</b>${rv}`;
+        },
+      },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        axisLabel: { fontSize: 11, color: '#94a3b8' },
+        axisLine: { lineStyle: { color: '#e5e7eb' } },
+        splitLine: { show: false },
+      },
+      yAxis: [
+        {
+          type: 'value',
+          min: 0,
+          max: 100,
+          name: 'Score',
+          nameTextStyle: { color: '#94a3b8', fontSize: 11 },
+          axisLabel: { color: '#94a3b8', fontSize: 11 },
+          splitLine: { lineStyle: { color: '#f1f5f9' } },
+        },
+        ...(showRaw && rawValues.some((v) => v != null)
+          ? [{
+              type: 'value' as const,
+              name: unit || 'Value',
+              nameTextStyle: { color: '#c7d2fe', fontSize: 11 },
+              axisLabel: { color: '#c7d2fe', fontSize: 11 },
+              splitLine: { show: false },
+            }]
+          : []),
+      ],
+      series: [
+        {
+          name: 'Score',
+          type: 'line',
+          data: scores,
+          smooth: true,
+          symbol: 'none',
+          lineStyle: { color: '#0d9488', width: 2 },
+          areaStyle: { color: '#0d9488', opacity: 0.08 },
+          markArea: {
+            silent: true,
+            data: buildRecessionMarkAreas(),
+          },
+        },
+        ...(showRaw && rawValues.some((v) => v != null)
+          ? [{
+              name: unit || 'Value',
+              type: 'line' as const,
+              yAxisIndex: 1,
+              data: rawValues,
+              smooth: true,
+              symbol: 'none',
+              lineStyle: { color: '#818cf8', width: 1.5, type: 'dashed' as const },
+            }]
+          : []),
+      ],
+    };
+
+    chart.setOption(option);
+    window.addEventListener('resize', () => chart.resize());
+  });
+</script>
