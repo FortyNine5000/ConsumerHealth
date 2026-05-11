@@ -10,6 +10,13 @@ try {
 
 const sectors = [...new Set(quotes.map((q) => q.sector).filter(Boolean))].sort();
 const tickers = [...new Set(quotes.map((q) => q.ticker))].sort();
+
+// Pre-compute filter attributes to avoid <= in template (Astro parser issue)
+const quotesWithAttrs = quotes.map((q) => ({
+  ...q,
+  dataSentiment: q.sentiment_score >= 0.3 ? 'positive' : q.sentiment_score < 0 ? 'negative' : 'neutral',
+  dataSignal: q.agrees_with_dashboard === 0 ? 'contradicts' : q.agrees_with_dashboard === 1 ? 'aligns' : '',
+}));
 ---
 
 <BaseLayout
@@ -61,12 +68,12 @@ const tickers = [...new Set(quotes.map((q) => q.ticker))].sort();
 
         <!-- Quote grid -->
         <div id="quote-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {quotes.map((q) => (
+          {quotesWithAttrs.map((q) => (
             <div
               class="quote-item"
               data-sector={q.sector}
-              data-sentiment={q.sentiment_score >= 0.3 ? 'positive' : q.sentiment_score <= -0.3 ? 'negative' : 'neutral'}
-              data-signal={q.agrees_with_dashboard === 0 ? 'contradicts' : q.agrees_with_dashboard === 1 ? 'aligns' : ''}
+              data-sentiment={q.dataSentiment}
+              data-signal={q.dataSignal}
               data-text={q.quote_text.toLowerCase()}
             >
               <QuoteCard quote={q} />

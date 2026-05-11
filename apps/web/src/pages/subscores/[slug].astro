@@ -15,7 +15,16 @@ const SUBSCORE_SLUGS = [
 ];
 
 export async function getStaticPaths() {
-  return SUBSCORE_SLUGS.map((slug) => ({ params: { slug } }));
+  const slugs = [
+    'labor_income',
+    'household_balance_sheet',
+    'credit_stress',
+    'spending_demand',
+    'sentiment_expectations',
+    'inflation_affordability',
+    'big_ticket_affordability',
+  ];
+  return slugs.map((slug) => ({ params: { slug } }));
 }
 
 const { slug } = Astro.params;

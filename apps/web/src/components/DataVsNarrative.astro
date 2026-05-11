@@ -25,7 +25,13 @@ const contradictors = quotes.filter((q) => q.agrees_with_dashboard === 0);
 const hasMeaningfulGap =
   positiveQuotes.length > 0 && stressedSubscores.length > 0 && contradictors.length > 0;
 
-const recentQuotes = quotes.slice(0, 6);
+const recentQuotes = quotes.slice(0, 6).map((q) => ({
+  ...q,
+  borderColor:
+    q.sentiment_score >= 0.3 ? 'border-green-400' :
+    q.sentiment_score < 0 ? 'border-red-400' :
+    'border-gray-400',
+}));
 ---
 
 <div class="bg-compass-navy text-white rounded-2xl p-6">
@@ -55,24 +61,18 @@ const recentQuotes = quotes.slice(0, 6);
   <!-- Recent quotes -->
   {recentQuotes.length > 0 && (
     <div class="space-y-3">
-      {recentQuotes.map((quote) => {
-        const sentimentColor =
-          quote.sentiment_score >= 0.3 ? 'border-green-400' :
-          quote.sentiment_score <= -0.3 ? 'border-red-400' :
-          'border-gray-400';
-        return (
-          <div class={`border-l-2 pl-3 ${sentimentColor}`}>
-            <div class="text-xs text-gray-400 mb-1">
-              <span class="font-semibold text-gray-300">{quote.ticker}</span>
-              {' · '}{quote.quarter}
-              {quote.agrees_with_dashboard === 0 && (
-                <span class="ml-2 text-red-400">↓ contradicts data</span>
-              )}
-            </div>
-            <p class="text-xs text-gray-200 leading-relaxed line-clamp-2">"{quote.quote_text}"</p>
+      {recentQuotes.map((quote) => (
+        <div class={`border-l-2 pl-3 ${quote.borderColor}`}>
+          <div class="text-xs text-gray-400 mb-1">
+            <span class="font-semibold text-gray-300">{quote.ticker}</span>
+            {' · '}{quote.quarter}
+            {quote.agrees_with_dashboard === 0 && (
+              <span class="ml-2 text-red-400">↓ contradicts data</span>
+            )}
           </div>
-        );
-      })}
+          <p class="text-xs text-gray-200 leading-relaxed line-clamp-2">"{quote.quote_text}"</p>
+        </div>
+      ))}
     </div>
   )}
 
