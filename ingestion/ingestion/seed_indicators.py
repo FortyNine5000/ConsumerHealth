@@ -9,7 +9,7 @@ Call seed(client) once; subsequent calls are idempotent (INSERT OR IGNORE on slu
 
 from __future__ import annotations
 
-import libsql_client
+from ingestion.db import _make_client, TursoClient
 import structlog
 
 from ingestion.db import upsert_indicator
@@ -1025,7 +1025,7 @@ INDICATORS: list[dict] = [
 # fmt: on
 
 
-async def seed(client: libsql_client.Client) -> int:
+async def seed(client: TursoClient) -> int:
     """Seed all indicators into the DB. Idempotent (slug UNIQUE → ON CONFLICT UPDATE)."""
     count = 0
     for ind in INDICATORS:
