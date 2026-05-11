@@ -65,7 +65,7 @@ class TursoClient:
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
-        self._http = httpx.AsyncClient(timeout=30.0)
+        self._http = httpx.AsyncClient(timeout=60.0)
 
     async def execute(self, sql_or_stmt, args: list | None = None) -> ResultSet:
         if isinstance(sql_or_stmt, Statement):
@@ -309,7 +309,9 @@ async def upsert_subscores(client: TursoClient, rows: list[dict]) -> int:
         )
         for r in rows
     ]
-    await client.batch(stmts)
+    chunk_size = 500
+    for i in range(0, len(stmts), chunk_size):
+        await client.batch(stmts[i : i + chunk_size])
     return len(rows)
 
 
