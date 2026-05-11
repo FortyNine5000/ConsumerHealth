@@ -71,7 +71,7 @@ class TestExpandingPercentileRank:
     def test_all_same_values_return_50(self, flat_series):
         result = expanding_percentile_rank(flat_series)
         # All values equal → every rank should be 50
-        assert (result.dropna() == pytest.approx(50.0)).all()
+        assert np.allclose(result.dropna().values, 50.0)
 
     def test_output_range_0_to_100(self, monotone_series):
         result = expanding_percentile_rank(monotone_series)

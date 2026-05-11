@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  /* Score band colors */
+  --color-band-very-strong: #1a7c3e;
+  --color-band-healthy:     #2ecc71;
+  --color-band-mixed:       #f0c419;
+  --color-band-weakening:   #e67e22;
+  --color-band-stressed:    #e74c3c;
+  --color-band-crisis:      #8b0000;
+
+  /* Brand colors */
+  --color-compass-navy:     #1a2744;
+  --color-compass-teal:     #0d9488;
+  --color-compass-slate:    #475569;
+
+  /* Fonts */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', Consolas, monospace;
+}
