@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import json
+import math
 import os
 import pathlib
 from typing import Any, NamedTuple
@@ -40,7 +41,9 @@ def _encode_value(v: Any) -> dict:
     if isinstance(v, int):
         return {"type": "integer", "value": str(v)}
     if isinstance(v, float):
-        return {"type": "real", "value": str(v)}
+        if math.isnan(v) or math.isinf(v):
+            return {"type": "null"}
+        return {"type": "float", "value": v}
     return {"type": "text", "value": str(v)}
 
 
@@ -62,7 +65,7 @@ class TursoClient:
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
-        self._http = httpx.AsyncClient(timeout=30.0)
+        self._http = httpx.AsyncClient(timeout=60.0)
 
     async def execute(self, sql_or_stmt, args: list | None = None) -> ResultSet:
         if isinstance(sql_or_stmt, Statement):
@@ -85,7 +88,8 @@ class TursoClient:
             ]
         }
         resp = await self._http.post(self._url, headers=self._headers, json=payload)
-        resp.raise_for_status()
+        if not resp.is_success:
+            raise RuntimeError(f"Turso HTTP {resp.status_code}: {resp.text[:2000]}")
         data = resp.json()
         result = data["results"][0]
         if result["type"] == "error":
@@ -121,7 +125,8 @@ class TursoClient:
         requests.append({"type": "close"})
         payload = {"requests": requests}
         resp = await self._http.post(self._url, headers=self._headers, json=payload)
-        resp.raise_for_status()
+        if not resp.is_success:
+            raise RuntimeError(f"Turso HTTP {resp.status_code}: {resp.text[:2000]}")
         data = resp.json()
         for i, result in enumerate(data["results"][:-1]):
             if result["type"] == "error":
@@ -304,7 +309,9 @@ async def upsert_subscores(client: TursoClient, rows: list[dict]) -> int:
         )
         for r in rows
     ]
-    await client.batch(stmts)
+    chunk_size = 500
+    for i in range(0, len(stmts), chunk_size):
+        await client.batch(stmts[i : i + chunk_size])
     return len(rows)
 
 
