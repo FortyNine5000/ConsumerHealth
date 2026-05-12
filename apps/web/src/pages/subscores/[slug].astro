@@ -37,13 +37,9 @@ let history: { score_date: string; score: number }[] = [];
 let indicators = [];
 let subscores = [];
 
-try {
-  [history, indicators, subscores] = await Promise.all([
-    getSubScoreHistory(slug!),
-    getAllIndicators(),
-    getLatestSubScores(),
-  ]);
-} catch (e) {}
+try { history = await getSubScoreHistory(slug!); } catch (e) {}
+try { indicators = await getAllIndicators(); } catch (e) {}
+try { subscores = await getLatestSubScores(); } catch (e) {}
 
 const currentSubscore = subscores.find((s) => s.slug === slug);
 const currentScore = currentSubscore?.score ?? null;
