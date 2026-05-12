@@ -1,8 +1,8 @@
-import { createClient } from '@libsql/client/http';
+import { createClient } from '@libsql/client';
 
 function getClient() {
   const rawUrl = import.meta.env.TURSO_DATABASE_URL ?? '';
-  // Force HTTPS transport — avoids WebSocket connection limits during parallel static builds
+  // Use https:// so @libsql/client picks HTTP mode — avoids WebSocket limits during parallel static builds
   const url = rawUrl.replace(/^libsql:\/\//, 'https://');
   return createClient({
     url,
