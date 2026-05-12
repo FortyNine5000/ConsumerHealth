@@ -94,7 +94,7 @@ export async function getLatestHeadlineScore(): Promise<HeadlineScore | null> {
   try {
     const result = await client.execute(
       `SELECT score_date, score, band, band_color, delta_1m, delta_3m, delta_12m,
-              biggest_gains, biggest_drops, one_liner
+              biggest_gains, biggest_drops
        FROM headline_scores
        ORDER BY score_date DESC
        LIMIT 1`
@@ -111,7 +111,7 @@ export async function getLatestHeadlineScore(): Promise<HeadlineScore | null> {
       delta_12m: r[6] as number | null,
       biggest_gains: r[7] as string | null,
       biggest_drops: r[8] as string | null,
-      one_liner: r[9] as string | null,
+      one_liner: null,
     };
   } finally {
     client.close();
@@ -163,10 +163,10 @@ export async function getAllIndicators(): Promise<IndicatorRow[]> {
   const client = getClient();
   try {
     const result = await client.execute(
-      `SELECT i.slug, i.label, i.subscore, i.series_id, i.frequency,
+      `SELECT i.slug, i.name, i.subscore, i.series_id, i.frequency,
               i.scoring_type, i.higher_is_better, i.weight_in_subscore, i.is_scored,
-              s.name AS source_name, s.url AS source_url,
-              i.description, i.unit,
+              s.name AS source_name, s.base_url AS source_url,
+              i.description_md, i.units,
               (SELECT sc.smoothed_score FROM indicator_scores sc WHERE sc.indicator_id = i.id ORDER BY sc.score_date DESC LIMIT 1) AS latest_score,
               (SELECT sc.raw_value FROM indicator_scores sc WHERE sc.indicator_id = i.id ORDER BY sc.score_date DESC LIMIT 1) AS latest_value,
               (SELECT sc.score_date FROM indicator_scores sc WHERE sc.indicator_id = i.id ORDER BY sc.score_date DESC LIMIT 1) AS latest_date
@@ -202,10 +202,10 @@ export async function getIndicatorBySlug(slug: string): Promise<IndicatorRow | n
   const client = getClient();
   try {
     const result = await client.execute({
-      sql: `SELECT i.slug, i.label, i.subscore, i.series_id, i.frequency,
+      sql: `SELECT i.slug, i.name, i.subscore, i.series_id, i.frequency,
                    i.scoring_type, i.higher_is_better, i.weight_in_subscore, i.is_scored,
-                   s.name AS source_name, s.url AS source_url,
-                   i.description, i.unit,
+                   s.name AS source_name, s.base_url AS source_url,
+                   i.description_md, i.units,
                    NULL AS latest_score, NULL AS latest_value, NULL AS latest_date
             FROM indicators i
             LEFT JOIN sources s ON s.id = i.source_id
