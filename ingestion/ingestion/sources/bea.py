@@ -37,7 +37,7 @@ BEA_ENDPOINT = "https://apps.bea.gov/api/data"
 # T24200U = Personal Consumption Expenditures by Type of Product (Monthly, chained $)
 NIPA_TABLES = [
     ("T20600", "M"),   # Personal Income & Outlays (monthly)
-    ("T24200U", "M"),  # Real PCE by category (monthly, chained)
+    ("T20405", "M"),   # Real PCE by type of product (monthly, chained $2017)
 ]
 
 # BEA line descriptions we care about (substring match)
@@ -109,13 +109,16 @@ class BEAClient:
         if self._http is None:
             raise RuntimeError("BEAClient must be used as async context manager")
 
+        # BEA uses "X" not "ALL" to request all available years
+        bea_year = "X" if year == "ALL" else year
+
         params = {
             "UserID": self.api_key,
             "method": "GetData",
             "datasetname": "NIPA",
             "TableName": table_name,
             "Frequency": frequency,
-            "Year": year,
+            "Year": bea_year,
             "ResultFormat": "JSON",
         }
         log.debug("bea.fetch", table=table_name, frequency=frequency)
