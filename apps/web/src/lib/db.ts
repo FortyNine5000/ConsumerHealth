@@ -132,16 +132,15 @@ export async function getLatestSubScores(): Promise<SubScore[]> {
       args: [latestDate],
     });
 
-    const sparklineResults = await Promise.all(
-      result.rows.map(async (row) => {
-        const slug = row[0] as string;
-        const spark = await client.execute({
-          sql: `SELECT score FROM subscores WHERE slug = ? ORDER BY score_date DESC LIMIT 12`,
-          args: [slug],
-        });
-        return spark.rows.map((r) => r[0] as number).reverse();
-      })
-    );
+    const sparklineResults: number[][] = [];
+    for (const row of result.rows) {
+      const slug = row[0] as string;
+      const spark = await client.execute({
+        sql: `SELECT score FROM subscores WHERE slug = ? ORDER BY score_date DESC LIMIT 12`,
+        args: [slug],
+      });
+      sparklineResults.push(spark.rows.map((r) => r[0] as number).reverse());
+    }
 
     return result.rows.map((r, i) => {
       const slug = r[0] as string;

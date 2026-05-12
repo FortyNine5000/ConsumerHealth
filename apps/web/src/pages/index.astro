@@ -15,15 +15,9 @@ let headline = null;
 let subscores = [];
 let quotes = [];
 
-try {
-  [headline, subscores, quotes] = await Promise.all([
-    getLatestHeadlineScore(),
-    getLatestSubScores(),
-    getRecentQuotes(12),
-  ]);
-} catch (e) {
-  // DB not yet populated — show placeholder UI
-}
+try { headline  = await getLatestHeadlineScore(); } catch (e) {}
+try { subscores = await getLatestSubScores();     } catch (e) {}
+try { quotes    = await getRecentQuotes(12);      } catch (e) {}
 
 const hasData = headline !== null;
 const movers: { gains: string[]; drops: string[] } = { gains: [], drops: [] };
