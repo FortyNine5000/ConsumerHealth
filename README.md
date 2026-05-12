@@ -1,6 +1,6 @@
 # The Consumer Compass
 
-**Where the data meets the narrative.**
+**Where the data meets the narrative.** 
 
 A free, public dashboard tracking U.S. consumer financial health with a 0–100 headline score, 7 sub-scores, 30 underlying indicators, and an earnings-call quote tracker that surfaces the gap between what the data says and what corporations are saying.
 
