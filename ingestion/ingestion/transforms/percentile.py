@@ -213,7 +213,7 @@ def transform_net_worth_dpi_ratio(
     """
     Compute Household Net Worth / Annualized Nominal DPI ratio.
 
-    net_worth: quarterly series (BOGZ1FL192090005Q, $B)
+    net_worth: quarterly series (BOGZ1FL192090005Q; FRED may provide this in millions)
     nominal_dpi_monthly: monthly series (DSPI, $B SAAR — already annualized)
 
     Aligns to quarterly frequency by resampling DPI to quarter-end.
@@ -223,7 +223,17 @@ def transform_net_worth_dpi_ratio(
     dpi_quarterly = nominal_dpi_monthly.resample("QS").last().ffill()
     # Align indices
     common_idx = net_worth.index.intersection(dpi_quarterly.index)
-    ratio = net_worth.loc[common_idx] / dpi_quarterly.loc[common_idx]
+    numerator = net_worth.loc[common_idx].astype(float)
+    denominator = dpi_quarterly.loc[common_idx].astype(float)
+    ratio = numerator / denominator
+
+    # FRED's Z.1 net-worth series can arrive in millions while DSPI is in
+    # billions SAAR. A raw ratio in the thousands is the tell; normalize the
+    # numerator to billions so the displayed ratio is ~7x, not ~7,000x.
+    valid_ratio = ratio.replace([np.inf, -np.inf], np.nan).dropna()
+    if not valid_ratio.empty and valid_ratio.median() > 100:
+        ratio = (numerator / 1000.0) / denominator
+
     return ratio
 
 

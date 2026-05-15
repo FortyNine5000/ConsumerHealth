@@ -34,7 +34,6 @@ from ingestion.db import (
 from ingestion.seed_indicators import seed as seed_indicators
 from ingestion.sources import bea, bls, eia, fred
 from ingestion.transforms.percentile import (
-    forward_fill_quarterly_to_monthly,
     score_indicator,
     transform_mom_3mo_ann,
     transform_net_worth_dpi_ratio,
@@ -42,6 +41,7 @@ from ingestion.transforms.percentile import (
 )
 from ingestion.transforms.scoring import (
     SUBSCORE_CONFIG,
+    build_monthly_score_panel,
     compute_all_subscores,
     compute_biggest_movers,
     compute_deltas,
@@ -147,13 +147,14 @@ async def _score_all_indicators(
         log.info("score.indicator.ok", slug=slug, rows=len(rows))
 
         df["indicator_slug"] = slug
+        df["frequency"] = freq
         all_scored.append(df)
 
     if not all_scored:
-        return pd.DataFrame(columns=["indicator_slug", "score_date", "smoothed_score"])
+        return pd.DataFrame(columns=["indicator_slug", "score_date", "smoothed_score", "frequency"])
 
     combined = pd.concat(all_scored, ignore_index=True)
-    return combined[["indicator_slug", "score_date", "smoothed_score"]]
+    return combined[["indicator_slug", "score_date", "smoothed_score", "frequency"]]
 
 
 def _get_transform(slug: str):
@@ -185,14 +186,19 @@ async def _compute_subscores_and_headline(
         log.warning("subscores.skip", reason="no indicator scores available")
         return
 
+    score_panel = build_monthly_score_panel(all_scores_df)
+    if score_panel.empty:
+        log.warning("subscores.skip", reason="no monthly score panel available")
+        return
+
     # Get all unique month-start dates
-    all_dates = sorted(all_scores_df["score_date"].unique())
+    all_dates = sorted(score_panel["score_date"].unique())
 
     subscore_rows: list[dict] = []
     headline_rows: list[dict] = []
 
     for score_date in all_dates:
-        subscores = compute_all_subscores(all_scores_df, score_date)
+        subscores = compute_all_subscores(score_panel, score_date)
         for slug, score in subscores.items():
             if score is not None and not np.isnan(score):
                 subscore_rows.append({

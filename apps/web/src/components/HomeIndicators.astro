@@ -114,6 +114,12 @@ function formatDelta(value: number | null, unit: string | null) {
   })}`;
 }
 
+function normalizeDisplayValue(slug: string, value: number | null) {
+  if (value == null || !Number.isFinite(value)) return value;
+  if (slug === 'networth_dpi_ratio' && Math.abs(value) > 100) return value / 1000;
+  return value;
+}
+
 function deltaLabel(frequency: string) {
   if (frequency === 'weekly') return 'wk/wk';
   if (frequency === 'quarterly') return 'qtr/qtr';
@@ -153,12 +159,13 @@ function buildSpark(values: number[], width = 220, height = 56, pad = 3, fixedMi
 const latestSubscoreBySlug = new Map(latestSubscores.map((s) => [s.slug, s]));
 
 const cards = scored.map((indicator) => {
-  const sparkline = indicator.sparkline.length > 1
-    ? indicator.sparkline
+  const normalizedRawSparkline = indicator.sparkline.map((value) => normalizeDisplayValue(indicator.slug, value) ?? value);
+  const sparkline = normalizedRawSparkline.length > 1
+    ? normalizedRawSparkline
     : indicator.score_sparkline;
-  const value = indicator.latest_value;
-  const delta = indicator.sparkline.length > 1
-    ? indicator.sparkline[indicator.sparkline.length - 1] - indicator.sparkline[indicator.sparkline.length - 2]
+  const value = normalizeDisplayValue(indicator.slug, indicator.latest_value);
+  const delta = normalizedRawSparkline.length > 1
+    ? normalizedRawSparkline[normalizedRawSparkline.length - 1] - normalizedRawSparkline[normalizedRawSparkline.length - 2]
     : null;
   const score = indicator.latest_score;
   const status = statusFor(score);
@@ -223,9 +230,21 @@ for (const slug of subscoreOrder) {
   });
 }
 
-const headlineScore = headline?.score ?? null;
+function weightedGroupScore() {
+  const valid = groups.filter((group) => group.score != null && Number.isFinite(group.score));
+  const totalWeight = valid.reduce((sum, group) => sum + group.weight, 0);
+  if (totalWeight <= 0) return null;
+  return valid.reduce((sum, group) => sum + (group.score ?? 0) * group.weight, 0) / totalWeight;
+}
+
+const componentScore = weightedGroupScore();
+const headlineScore = componentScore ?? headline?.score ?? null;
 const headlineStatus = statusFor(headlineScore);
 const headlineScores = headlineHistory.slice(-60).map((row) => row.score);
+const scoreMismatch = headline?.score != null && componentScore != null && Math.abs(headline.score - componentScore) > 1;
+if (scoreMismatch && headlineScores.length > 0 && headlineScore != null) {
+  headlineScores[headlineScores.length - 1] = headlineScore;
+}
 const headlineSpark = buildSpark(headlineScores, 460, 130, 6, 0, 100);
 const headlineScoreText = headlineScore == null ? '-' : String(Math.round(headlineScore));
 const updatedLabel = formatFullDate(headline?.score_date ?? null);
@@ -257,16 +276,18 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
               {headlineStatus.label}
             </div>
           </div>
-          <div class="composite-deltas">
-            <div>
-              <span>vs prior</span>
-              <strong class={headline?.delta_1m != null && headline.delta_1m < 0 ? 'delta-bad' : ''}>{formatDelta(headline?.delta_1m ?? null, null)}</strong>
+          {!scoreMismatch && (
+            <div class="composite-deltas">
+              <div>
+                <span>vs prior</span>
+                <strong class={headline?.delta_1m != null && headline.delta_1m < 0 ? 'delta-bad' : ''}>{formatDelta(headline?.delta_1m ?? null, null)}</strong>
+              </div>
+              <div>
+                <span>vs year</span>
+                <strong class={headline?.delta_12m != null && headline.delta_12m < 0 ? 'delta-bad' : ''}>{formatDelta(headline?.delta_12m ?? null, null)}</strong>
+              </div>
             </div>
-            <div>
-              <span>vs year</span>
-              <strong class={headline?.delta_12m != null && headline.delta_12m < 0 ? 'delta-bad' : ''}>{formatDelta(headline?.delta_12m ?? null, null)}</strong>
-            </div>
-          </div>
+          )}
         </div>
 
         {headlineSpark ? (
@@ -298,23 +319,6 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
           </div>
         ) : (
           <div class="composite-empty">Composite history will appear after ingestion runs.</div>
-        )}
-
-        {groups.length > 0 && (
-          <div class="subscore-mini">
-            {groups.map((group) => (
-              <button type="button" data-filter={group.slug} title={group.label}>
-                <span class="mini-bar-track">
-                  <span
-                    class="mini-bar"
-                    style={`height: ${Math.max(8, group.score ?? 0)}%; background: ${group.status.color}`}
-                  />
-                </span>
-                <span class="mini-label">{group.shortLabel}</span>
-                <strong>{group.scoreText}</strong>
-              </button>
-            ))}
-          </div>
         )}
       </div>
     </section>
@@ -478,7 +482,7 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(420px, 0.95fr);
     gap: 48px;
-    align-items: end;
+    align-items: start;
   }
 
   .hero-copy h1 {
@@ -567,7 +571,6 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
   }
 
   .composite-deltas span,
-  .subscore-mini strong,
   .card-value-row small,
   .card-foot span:last-child {
     display: block;
@@ -623,54 +626,6 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
     border-top: 1px solid var(--hairline);
     padding-top: 20px;
     font-size: 14px;
-  }
-
-  .subscore-mini {
-    margin-top: 26px;
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 6px;
-  }
-
-  .subscore-mini button {
-    appearance: none;
-    border: 0;
-    background: transparent;
-    padding: 0;
-    color: inherit;
-    cursor: pointer;
-    font: inherit;
-    text-align: left;
-    text-decoration: none;
-    min-width: 0;
-  }
-
-  .mini-bar-track {
-    display: flex;
-    align-items: flex-end;
-    height: 54px;
-    border: 1px solid var(--hairline);
-    background: #fbfaf7;
-    padding: 4px;
-  }
-
-  .mini-bar {
-    display: block;
-    width: 100%;
-    min-height: 6px;
-  }
-
-  .mini-label {
-    display: block;
-    margin-top: 6px;
-    color: var(--muted);
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-size: 9px;
-    line-height: 1.1;
-    text-transform: uppercase;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .filter-strip {
@@ -1091,10 +1046,6 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
       font-size: 74px;
     }
 
-    .subscore-mini {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-
     .group-header {
       display: block;
     }
@@ -1118,8 +1069,7 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
   }
 
   @media (max-width: 560px) {
-    .indicator-grid,
-    .subscore-mini {
+    .indicator-grid {
       grid-template-columns: 1fr;
     }
 

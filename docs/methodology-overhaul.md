@@ -19,6 +19,14 @@ The current production score is mainly a state score. It answers, "How healthy i
 
 The fix should not be to make the headline score hyper-reactive. A consumer health index needs both stability and turning-point sensitivity. The better architecture is to compute state, short momentum, and medium trend separately, then choose a headline mix only after backtesting.
 
+## May 2026 quality-control fixes
+
+Before changing the headline formula, v1 needs two mechanical corrections:
+
+- Build a monthly score panel before sub-score and headline aggregation, carrying daily, weekly, monthly, and quarterly data forward only inside an explicit freshness window.
+- Avoid headline re-normalization around only the fastest-updating indicators during a partial current month.
+- Normalize the FRED Z.1 household net-worth series to the same dollar scale as disposable personal income before calculating net worth / DPI.
+
 ## Recommended v2 signal stack
 
 | Layer | Purpose | Candidate computation | Initial weight range |
@@ -82,7 +90,7 @@ Recommended publishable metrics:
 - Add indicator-level 1m / 3m / 12m movement next to the raw value.
 - Add a staleness badge for quarterly or delayed indicators.
 - Add a "what changed" panel that cites the specific indicators dragging the score up or down.
-- Preserve the current sub-score pages, but add a component breakdown so users can see whether a sub-score is weak because of level, momentum, or trend.
+- Keep sub-score filtering on the homepage and add a component breakdown so users can see whether a sub-score is weak because of level, momentum, or trend.
 - Keep user-customizable weights as a later feature; first make the default methodology defensible.
 
 ## Suggested implementation order
@@ -101,4 +109,3 @@ Recommended publishable metrics:
 - Whether to keep expanding percentile as the only scaler or add robust z-scores for severity diagnostics.
 - How to handle extreme pandemic-era values so they do not permanently compress later percentile variation.
 - How much to penalize stale quarterly data versus simply labeling it.
-

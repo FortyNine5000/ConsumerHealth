@@ -91,6 +91,13 @@ const roadmapRows = [
         target is a tested state / momentum / trend mix, with the exact weights chosen by backtest
         rather than by intuition.
       </p>
+      <p class="text-sm text-gray-700 leading-relaxed mt-3">
+        Current quality-control fixes focus on two v1 mechanics: stale indicators are carried forward
+        only within a frequency-specific freshness window before the headline is computed, and the
+        household net-worth / DPI ratio normalizes FRED Z.1 net worth into the same dollar scale as
+        disposable income. These fixes reduce artificial month-to-month jumps without changing the
+        broader v2 testing plan.
+      </p>
     </section>
 
     <section class="mb-10">
@@ -169,7 +176,7 @@ const roadmapRows = [
         <li>Higher-is-better indicators keep their percentile rank.</li>
         <li>Lower-is-better indicators are inverted, so weaker labor, rising delinquencies, and higher rates reduce the score.</li>
         <li>CPI indicators are scored by proximity to 2% rather than by lower-is-always-better logic.</li>
-        <li>Missing sub-scores are renormalized across the available weights so early history can still be computed.</li>
+        <li>Indicators are carried forward only inside a freshness window before monthly sub-scores and the headline are computed.</li>
       </ul>
     </section>
 

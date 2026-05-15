@@ -235,8 +235,8 @@ INDICATORS: list[dict] = [
         "is_scored": True,
         "backfill_start": "1990-01-01",
         "notes": (
-            "Derived: BOGZ1FL192090005Q (household net worth, $B nominal) "
-            "divided by DSPI×4 (annualized nominal DPI). "
+            "Derived: BOGZ1FL192090005Q (household net worth, normalized to $B nominal) "
+            "divided by DSPI (annualized nominal DPI). "
             "Requires DSPI (supporting series) to be ingested."
         ),
         "why_it_matters_md": (
@@ -902,7 +902,7 @@ INDICATORS: list[dict] = [
         "lcl_class": "coincident",
         "is_scored": False,
         "backfill_start": "1990-01-01",
-        "notes": "Used as denominator for net worth / DPI ratio (×4 to annualize).",
+        "notes": "Used as denominator for net worth / DPI ratio. DSPI is already annualized SAAR.",
     },
     {
         "slug": "bogz1fl192090005q",

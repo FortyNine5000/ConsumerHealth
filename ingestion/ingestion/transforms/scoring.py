@@ -98,6 +98,13 @@ assert abs(sum(v["weight"] for v in SUBSCORE_CONFIG.values()) - 1.0) < 1e-9, (
     "Sub-score weights must sum to 1.0"
 )
 
+STALE_LIMIT_BY_FREQUENCY = {
+    "daily": 1,
+    "weekly": 1,
+    "monthly": 2,
+    "quarterly": 3,
+}
+
 # ── Score bands (spec §3.1) ───────────────────────────────────────────────────
 SCORE_BANDS = [
     (85, "Very Strong",     "#1a7c3e"),
@@ -189,6 +196,54 @@ def compute_all_subscores(
         subscores[subscore_slug] = compute_subscore(ind_scores)
 
     return subscores
+
+
+def build_monthly_score_panel(all_scores_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build the monthly scoring panel used for sub-scores and the headline.
+
+    Each indicator contributes its latest available score into a monthly grid
+    for a limited freshness window. This prevents a partial current month from
+    re-normalizing the headline around only the fastest-updating series.
+    """
+    if all_scores_df.empty:
+        return pd.DataFrame(columns=["indicator_slug", "score_date", "smoothed_score", "frequency"])
+
+    df = all_scores_df.copy()
+    if "frequency" not in df.columns:
+        df["frequency"] = "monthly"
+
+    df = df.dropna(subset=["indicator_slug", "score_date", "smoothed_score"])
+    if df.empty:
+        return pd.DataFrame(columns=["indicator_slug", "score_date", "smoothed_score", "frequency"])
+
+    df["score_date"] = pd.to_datetime(df["score_date"]).dt.to_period("M").dt.start_time
+    df = df.sort_values(["indicator_slug", "score_date"])
+    df = df.groupby(["indicator_slug", "score_date"], as_index=False).agg({
+        "smoothed_score": "last",
+        "frequency": "last",
+    })
+
+    monthly_index = pd.date_range(df["score_date"].min(), df["score_date"].max(), freq="MS")
+    panels: list[pd.DataFrame] = []
+
+    for indicator_slug, group in df.groupby("indicator_slug"):
+        frequency = str(group["frequency"].dropna().iloc[-1] or "monthly")
+        limit = STALE_LIMIT_BY_FREQUENCY.get(frequency, 1)
+        series = group.set_index("score_date")["smoothed_score"].sort_index()
+        monthly = series.reindex(monthly_index).ffill(limit=limit).dropna()
+        if monthly.empty:
+            continue
+        panel = monthly.rename("smoothed_score").reset_index().rename(columns={"index": "score_date"})
+        panel["indicator_slug"] = indicator_slug
+        panel["frequency"] = frequency
+        panel["score_date"] = panel["score_date"].dt.strftime("%Y-%m-%d")
+        panels.append(panel[["indicator_slug", "score_date", "smoothed_score", "frequency"]])
+
+    if not panels:
+        return pd.DataFrame(columns=["indicator_slug", "score_date", "smoothed_score", "frequency"])
+
+    return pd.concat(panels, ignore_index=True)
 
 
 def compute_deltas(

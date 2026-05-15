@@ -15,6 +15,7 @@ import pytest
 
 from ingestion.transforms.scoring import (
     SUBSCORE_CONFIG,
+    build_monthly_score_panel,
     compute_biggest_movers,
     compute_deltas,
     compute_headline,
@@ -186,3 +187,33 @@ class TestComputeBiggestMovers:
         gains, drops = compute_biggest_movers(df, "2024-01-01")
         assert gains == []
         assert drops == []
+
+
+class TestBuildMonthlyScorePanel:
+    def test_carries_stale_values_into_partial_current_month(self):
+        df = pd.DataFrame([
+            {"indicator_slug": "fast_monthly", "score_date": "2026-04-01", "smoothed_score": 50.0, "frequency": "monthly"},
+            {"indicator_slug": "fast_monthly", "score_date": "2026-05-01", "smoothed_score": 90.0, "frequency": "monthly"},
+            {"indicator_slug": "slow_monthly", "score_date": "2026-04-01", "smoothed_score": 40.0, "frequency": "monthly"},
+            {"indicator_slug": "quarterly", "score_date": "2026-04-01", "smoothed_score": 30.0, "frequency": "quarterly"},
+        ])
+
+        panel = build_monthly_score_panel(df)
+        may = panel[panel["score_date"] == "2026-05-01"]
+
+        assert dict(zip(may["indicator_slug"], may["smoothed_score"])) == {
+            "fast_monthly": 90.0,
+            "slow_monthly": 40.0,
+            "quarterly": 30.0,
+        }
+
+    def test_last_duplicate_month_wins(self):
+        df = pd.DataFrame([
+            {"indicator_slug": "weekly", "score_date": "2026-05-01", "smoothed_score": 20.0, "frequency": "weekly"},
+            {"indicator_slug": "weekly", "score_date": "2026-05-01", "smoothed_score": 30.0, "frequency": "weekly"},
+        ])
+
+        panel = build_monthly_score_panel(df)
+
+        assert len(panel) == 1
+        assert panel.iloc[0]["smoothed_score"] == pytest.approx(30.0)

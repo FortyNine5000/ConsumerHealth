@@ -23,6 +23,7 @@ from ingestion.transforms.percentile import (
     score_indicator,
     smooth_scores,
     transform_mom_3mo_ann,
+    transform_net_worth_dpi_ratio,
     transform_yoy,
 )
 
@@ -207,6 +208,30 @@ class TestTransforms:
         )
         result = transform_mom_3mo_ann(s)
         assert len(result) == len(s)
+
+    def test_net_worth_ratio_normalizes_millions_to_billions(self):
+        net_worth = pd.Series(
+            [150_000_000.0],
+            index=pd.DatetimeIndex(["2024-01-01"]),
+        )
+        dpi = pd.Series(
+            [20_000.0, 20_100.0, 20_200.0],
+            index=pd.date_range("2024-01-01", periods=3, freq="MS"),
+        )
+        ratio = transform_net_worth_dpi_ratio(net_worth, dpi)
+        assert ratio.iloc[0] == pytest.approx(150_000.0 / 20_200.0)
+
+    def test_net_worth_ratio_keeps_billions_scale(self):
+        net_worth = pd.Series(
+            [150_000.0],
+            index=pd.DatetimeIndex(["2024-01-01"]),
+        )
+        dpi = pd.Series(
+            [20_000.0, 20_100.0, 20_200.0],
+            index=pd.date_range("2024-01-01", periods=3, freq="MS"),
+        )
+        ratio = transform_net_worth_dpi_ratio(net_worth, dpi)
+        assert ratio.iloc[0] == pytest.approx(150_000.0 / 20_200.0)
 
 
 # ── forward_fill_quarterly_to_monthly ────────────────────────────────────────
