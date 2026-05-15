@@ -11,6 +11,8 @@ A free, public dashboard tracking U.S. consumer financial health with a 0–100 
 - **30 Indicators** — sourced from FRED, BLS, BEA, NY Fed, Census, EIA, Freddie Mac, TSA, and more — all free, citable, no paid vendor dependency
 - **Earnings-Call Quote Tracker** — catalogs what banks, card networks, retailers, restaurants, and auto companies say about the consumer, tagged as supporting or contradicting the underlying data
 
+The public site is intentionally simple: `/` is the indicator dashboard, `/methodology` explains the scoring, and `/earnings-quotes` houses the earnings-call quote tracker.
+
 ## Score Bands
 
 | Score | Label | Interpretation |

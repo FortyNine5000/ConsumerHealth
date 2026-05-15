@@ -11,13 +11,10 @@ const band = scoreToBand(data.score);
 const scoreDate = formatDate(data.score_date);
 ---
 
-<a
-  href={`/subscores/${data.slug}`}
-  class="block bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md hover:border-gray-200 transition-all group"
->
+<div class="block bg-white rounded-xl shadow-sm border border-gray-100 p-4">
   <div class="flex items-start justify-between mb-3">
     <div>
-      <div class="text-sm font-medium text-gray-700 group-hover:text-compass-navy transition-colors">
+      <div class="text-sm font-medium text-gray-700">
         {data.label}
       </div>
       <div class="text-xs text-gray-400 mt-0.5">{scoreDate}</div>
@@ -43,7 +40,7 @@ const scoreDate = formatDate(data.score_date);
   >
     {band.label}
   </div>
-</a>
+</div>
 
 <script>
   // Lightweight inline sparkline renderer using canvas

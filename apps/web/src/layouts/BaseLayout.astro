@@ -19,14 +19,13 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const fullTitle = title === 'The Consumer Compass' ? title : `${title} · The Consumer Compass`;
 const pathname = Astro.url.pathname;
 const navItems = [
-  { href: '/indicators', label: 'Indicators' },
-  { href: '/', label: 'Sub-scores' },
+  { href: '/', label: 'Home' },
   { href: '/methodology', label: 'Methodology' },
-  { href: '/quotes', label: 'Quotes' },
+  { href: '/earnings-quotes', label: 'Earnings Quotes' },
 ];
 
 function isActive(href: string) {
-  if (href === '/') return pathname === '/' || pathname.startsWith('/subscores');
+  if (href === '/') return pathname === '/';
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 ---
@@ -125,6 +124,7 @@ function isActive(href: string) {
           <div>
             <div class="text-white font-semibold mb-2">About</div>
             <ul class="space-y-1">
+              <li><a href="/earnings-quotes" class="hover:text-white transition-colors">Earnings Quotes</a></li>
               <li><a href="/methodology" class="hover:text-white transition-colors">Methodology</a></li>
               <li><a href="https://github.com/fortynine5000/consumerhealth" class="hover:text-white transition-colors" target="_blank" rel="noopener">GitHub</a></li>
             </ul>
