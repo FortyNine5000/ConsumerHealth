@@ -126,7 +126,7 @@ The headline score is a weighted sum of 7 sub-scores:
 3. Sub-scores are **equal-weighted averages** of their indicators
 4. Headline score is a **weighted sum** of sub-scores (Labor 20%, Credit 20%, Balance Sheet 15%, Spending 15%, Sentiment 10%, Inflation 10%, Big-Ticket 10%)
 
-See `/methodology` on the live site for full details including back-test validation against 1990, 2001, 2008, and 2020 recessions.
+See `/methodology` on the live site for the production scoring formula and the v2 methodology overhaul plan. The current overhaul direction is to keep the state-based score as the anchor while testing explicit short-momentum and medium-trend layers before changing the public headline score. Engineering notes live in [`docs/methodology-overhaul.md`](./docs/methodology-overhaul.md).
 
 ## Legal Notes
 

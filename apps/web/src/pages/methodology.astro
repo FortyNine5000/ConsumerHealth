@@ -1,65 +1,193 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+
+const signalLayers = [
+  {
+    layer: 'State',
+    question: 'How healthy is the current reading versus its own history?',
+    production: 'Expanding-window percentile score, direction-adjusted.',
+    v2: 'Keep as the anchor, with robust z-score diagnostics for severity.',
+  },
+  {
+    layer: 'Short momentum',
+    question: 'Is the indicator improving or deteriorating over the last 1-3 releases?',
+    production: 'Published today as headline 1m and 3m score deltas.',
+    v2: 'Add indicator-level momentum scores and roll them into the composite.',
+  },
+  {
+    layer: 'Medium trend',
+    question: 'Is the signal persistently moving over a 6-12 month horizon?',
+    production: 'Visible in history charts and sparklines, not directly scored.',
+    v2: 'Add trend slope / moving-average crossover scores after backtesting.',
+  },
+];
+
+const transformRows = [
+  ['Nonfarm Payrolls (PAYEMS)', 'Month-over-month change, then 3-month rolling average'],
+  ['Real Hourly Earnings, DPI, Retail Sales, PCE Food Services', 'Year-over-year percent change'],
+  ['Real PCE momentum', '3-month annualized rate of change'],
+  ['Net Worth / DPI', 'Household net worth divided by annualized disposable personal income'],
+  ['CPI, Core CPI, Shelter CPI', 'Year-over-year inflation scored by distance from 2%'],
+  ['TSA Throughput', 'Daily throughput compared with 2019 same-period baseline'],
+  ['Rates, delinquencies, claims, sentiment, saving rate', 'Economically meaningful level'],
+];
+
+const subscoreRows = [
+  ['Labor & Income', '20%', 'UNRATE, payroll growth, initial claims, continued claims, real wages'],
+  ['Credit Stress', '20%', 'Bank delinquencies, charge-offs, NY Fed serious delinquency transitions, SLOOS tightening'],
+  ['Balance Sheet', '15%', 'Saving rate, real income growth, debt service ratio, net worth / DPI'],
+  ['Spending & Demand', '15%', 'Real PCE momentum, real retail sales, travel demand, food services'],
+  ['Sentiment', '10%', 'UMich sentiment, OECD confidence proxy, NY Fed missed-payment probability'],
+  ['Inflation', '10%', 'Headline CPI, core CPI, shelter CPI, gasoline prices'],
+  ['Big Ticket', '10%', 'Mortgage rates, auto loan rates, credit-card rates, housing affordability'],
+];
+
+const validationRows = [
+  ['Recession response', 'Score should deteriorate before or by NBER recession starts without relying on future data.'],
+  ['Consumer outcome fit', 'Backtest against real PCE, retail sales, delinquencies, charge-offs, and employment weakness.'],
+  ['False-positive discipline', 'Track periods where the score warned but consumer data did not subsequently weaken.'],
+  ['Revision awareness', 'Prefer vintages where available and flag indicators with heavy benchmark revisions.'],
+  ['Staleness control', 'Do not let delayed quarterly indicators dominate a fresh monthly or weekly signal.'],
+];
+
+const roadmapRows = [
+  ['1', 'Publish state / momentum / trend views separately before changing the headline score.'],
+  ['2', 'Backtest several candidate mixes: 60/25/15, 55/30/15, and Perplexity-style 40/40/20.'],
+  ['3', 'Adopt the mix that improves turning-point detection without making the headline score too noisy.'],
+  ['4', 'Add indicator-level release lag, revision risk, and leading/coincident/lagging metadata to the UI.'],
+  ['5', 'Publish a reproducible validation report with weights, excluded series, and known failures.'],
+];
 ---
 
 <BaseLayout
   title="Methodology"
-  description="How The Consumer Compass calculates its 0–100 headline score — indicator selection, percentile transforms, weights, and recession back-test results."
+  description="How The Consumer Compass calculates its consumer financial health score, what the current production methodology does, and how the state/momentum/trend overhaul will improve it."
 >
-  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 prose prose-slate max-w-none">
-    <h1 class="text-3xl font-bold text-compass-navy mb-2">Methodology</h1>
-    <p class="text-gray-500 text-sm mb-8">Last updated May 2025 · <a href="https://github.com/fortynine5000/consumerhealth" class="text-compass-teal hover:underline" target="_blank" rel="noopener">Source on GitHub</a></p>
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <header class="mb-10">
+      <h1 class="text-3xl font-bold text-compass-navy mb-2">Methodology</h1>
+      <p class="text-gray-500 text-sm">
+        Last updated May 2026 ·
+        <a href="https://github.com/FortyNine5000/ConsumerHealth" class="text-compass-teal hover:underline" target="_blank" rel="noopener">Source on GitHub</a>
+      </p>
+      <p class="mt-5 text-gray-700 leading-relaxed max-w-3xl">
+        The Consumer Compass is a 0-100 gauge of U.S. consumer financial health. It combines labor,
+        income, balance-sheet, credit, spending, sentiment, inflation, and big-ticket affordability
+        data into a single score while preserving the underlying sub-scores and indicator histories.
+      </p>
+    </header>
 
-    <!-- Overview -->
-    <section class="mb-10">
-      <h2 class="text-xl font-semibold text-compass-navy mb-3">Overview</h2>
-      <p class="text-gray-700 leading-relaxed">
-        The Consumer Compass headline score is a weighted composite of 7 sub-scores covering ~30 indicators sourced entirely from free U.S. government APIs (FRED, BLS, BEA, NY Fed, SEC EDGAR). Each indicator is converted to a 0–100 score using an <strong>expanding-window percentile rank</strong> — its current value is ranked against all historical values back to 1990. This eliminates look-ahead bias and ensures the score is directly comparable across time.
+    <section class="mb-10 rounded-xl border border-teal-100 bg-teal-50 p-5">
+      <h2 class="text-lg font-semibold text-compass-navy mb-2">Methodology overhaul status</h2>
+      <p class="text-sm text-gray-700 leading-relaxed">
+        The production headline score currently uses the v1 state-based methodology described below:
+        transformed indicators are converted into expanding-window percentile scores, smoothed, then
+        aggregated. The v2 overhaul keeps that state score as the anchor but adds explicit short
+        momentum and medium-trend layers before any headline-weight change is adopted.
+      </p>
+      <p class="text-sm text-gray-700 leading-relaxed mt-3">
+        The key improvement is not simply "more momentum." A consumer health score needs to be stable
+        enough to describe the present, but responsive enough to catch turning points. The working v2
+        target is a tested state / momentum / trend mix, with the exact weights chosen by backtest
+        rather than by intuition.
       </p>
     </section>
 
-    <!-- Percentile scoring -->
     <section class="mb-10">
-      <h2 class="text-xl font-semibold text-compass-navy mb-3">Percentile Transform</h2>
-      <p class="text-gray-700 leading-relaxed mb-4">
-        For each indicator at time <em>t</em>, the score is:
-      </p>
-      <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 font-mono text-sm text-gray-700 mb-4 overflow-x-auto">
-        <div>rank(value_t) / N_t × 100</div>
-        <div class="text-gray-400 mt-1">where N_t = count of all observations from history[0] through history[t]</div>
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Scoring Principles</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="rounded-lg border border-gray-200 p-4">
+          <h3 class="font-semibold text-gray-800 text-sm mb-2">No look-ahead bias</h3>
+          <p class="text-sm text-gray-600 leading-relaxed">
+            A score at time t is computed only from data available through time t. Historical
+            percentiles use expanding windows, not the full future dataset.
+          </p>
+        </div>
+        <div class="rounded-lg border border-gray-200 p-4">
+          <h3 class="font-semibold text-gray-800 text-sm mb-2">Economic direction first</h3>
+          <p class="text-sm text-gray-600 leading-relaxed">
+            Each series is transformed into the version that best matches consumer stress or
+            strength before scoring: growth rates for flow data, levels for ratios, and target
+            proximity for inflation.
+          </p>
+        </div>
+        <div class="rounded-lg border border-gray-200 p-4">
+          <h3 class="font-semibold text-gray-800 text-sm mb-2">Transparent before clever</h3>
+          <p class="text-sm text-gray-600 leading-relaxed">
+            The score should be explainable from visible indicators, weights, transforms, and
+            validation results. New features must earn their place through walk-forward testing.
+          </p>
+        </div>
       </div>
-      <ul class="list-disc list-inside text-gray-700 space-y-2 text-sm leading-relaxed">
-        <li><strong>Higher-is-better indicators</strong> (e.g., payrolls, savings rate): higher percentile = higher score.</li>
-        <li><strong>Lower-is-better indicators</strong> (e.g., unemployment, delinquency): percentile is inverted (100 − percentile).</li>
-        <li><strong>CPI indicators</strong>: scored by <em>proximity to 2%</em> — the absolute distance |YoY − 2%| is ranked; lower distance scores higher.</li>
-        <li><strong>Context-only indicators</strong> (Manheim MUVVI): charted for context but excluded from scoring.</li>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Signal Architecture</h2>
+      <p class="text-gray-700 leading-relaxed text-sm mb-4">
+        The current score is primarily a state score. The methodology overhaul makes the three useful
+        questions explicit: what is the level, how fast is it changing, and whether the change is
+        persistent.
+      </p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border border-gray-200 rounded-lg">
+          <thead>
+            <tr class="bg-gray-50">
+              <th class="text-left p-3 font-semibold text-gray-700">Layer</th>
+              <th class="text-left p-3 font-semibold text-gray-700">Question</th>
+              <th class="text-left p-3 font-semibold text-gray-700">Production today</th>
+              <th class="text-left p-3 font-semibold text-gray-700">V2 upgrade</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {signalLayers.map((row) => (
+              <tr>
+                <td class="p-3 font-medium text-compass-navy">{row.layer}</td>
+                <td class="p-3 text-gray-600">{row.question}</td>
+                <td class="p-3 text-gray-500">{row.production}</td>
+                <td class="p-3 text-gray-500">{row.v2}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Current Production Formula</h2>
+      <p class="text-gray-700 leading-relaxed text-sm mb-4">
+        For each scored indicator, the pipeline applies an economic transform, ranks the transformed
+        value against its own history through that date, flips the direction where lower values are
+        healthier, smooths the result, and averages the available indicators inside each sub-score.
+      </p>
+      <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 font-mono text-sm text-gray-700 overflow-x-auto">
+        <div>state_score(t) = percentile_rank(value(t), history[0:t])</div>
+        <div>indicator_score(t) = direction_adjusted(state_score(t))</div>
+        <div>sub_score(t) = average(smoothed_indicator_scores(t))</div>
+        <div>headline(t) = weighted_average(sub_scores(t))</div>
+      </div>
+      <ul class="list-disc list-inside text-gray-700 space-y-2 text-sm leading-relaxed mt-4">
+        <li>Higher-is-better indicators keep their percentile rank.</li>
+        <li>Lower-is-better indicators are inverted, so weaker labor, rising delinquencies, and higher rates reduce the score.</li>
+        <li>CPI indicators are scored by proximity to 2% rather than by lower-is-always-better logic.</li>
+        <li>Missing sub-scores are renormalized across the available weights so early history can still be computed.</li>
       </ul>
     </section>
 
-    <!-- Transforms -->
     <section class="mb-10">
       <h2 class="text-xl font-semibold text-compass-navy mb-3">Pre-Score Transforms</h2>
       <div class="overflow-x-auto">
         <table class="w-full text-sm border border-gray-200 rounded-lg">
           <thead>
             <tr class="bg-gray-50">
-              <th class="text-left p-3 font-semibold text-gray-700">Indicator</th>
-              <th class="text-left p-3 font-semibold text-gray-700">Transform</th>
+              <th class="text-left p-3 font-semibold text-gray-700">Indicator family</th>
+              <th class="text-left p-3 font-semibold text-gray-700">Transform before scoring</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
-            {[
-              ['Nonfarm Payrolls (PAYEMS)', 'MoM change → 3-month rolling average'],
-              ['Real Hourly Earnings, DPI, Retail Sales, PCE', 'Year-over-year % change'],
-              ['PCE (spending momentum)', '3-month annualized rate of change'],
-              ['Net Worth / DPI', 'BOGZ1FL192090005Q ÷ DSPI (both quarterly)'],
-              ['CPI (all variants)', '|YoY − 2.0%| distance → scored on lower distance'],
-              ['TSA Throughput', 'vs. 2019 baseline (pre-pandemic normalization)'],
-              ['All others', 'Raw level (already stationary or ratio)'],
-            ].map(([ind, xform]) => (
+            {transformRows.map(([indicator, transform]) => (
               <tr>
-                <td class="p-3 text-gray-700">{ind}</td>
-                <td class="p-3 text-gray-500 font-mono text-xs">{xform}</td>
+                <td class="p-3 text-gray-700">{indicator}</td>
+                <td class="p-3 text-gray-500">{transform}</td>
               </tr>
             ))}
           </tbody>
@@ -67,80 +195,69 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       </div>
     </section>
 
-    <!-- Smoothing -->
     <section class="mb-10">
-      <h2 class="text-xl font-semibold text-compass-navy mb-3">Smoothing</h2>
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Smoothing and Update Cadence</h2>
       <p class="text-gray-700 leading-relaxed text-sm">
-        After scoring, each indicator's 0–100 series is smoothed with a rolling average before sub-score aggregation:
+        Smoothing is applied after scoring so extreme single releases do not dominate the composite.
+        Monthly indicators use a 3-month trailing average, weekly indicators use a 4-week trailing
+        average, daily indicators use a 30-day trailing average, and quarterly indicators are carried
+        forward only long enough to remain relevant in the monthly score timeline.
       </p>
-      <ul class="list-disc list-inside text-gray-700 space-y-1 text-sm mt-2">
-        <li>Monthly indicators: 3-month centered rolling average</li>
-        <li>Weekly indicators: 4-week rolling average</li>
-        <li>Daily indicators: 30-day rolling average</li>
-        <li>Quarterly indicators: no smoothing applied</li>
-      </ul>
+      <p class="text-gray-700 leading-relaxed text-sm mt-3">
+        A v2 staleness adjustment should make release timing visible: weekly claims should move the
+        labor signal faster than quarterly delinquency data, and stale quarterly data should never
+        masquerade as fresh evidence.
+      </p>
     </section>
 
-    <!-- Sub-score weights -->
     <section class="mb-10">
       <h2 class="text-xl font-semibold text-compass-navy mb-3">Sub-Score Weights</h2>
       <div class="overflow-x-auto">
         <table class="w-full text-sm border border-gray-200 rounded-lg">
           <thead>
             <tr class="bg-gray-50">
-              <th class="text-left p-3 font-semibold text-gray-700">Sub-Score</th>
-              <th class="text-left p-3 font-semibold text-gray-700">Weight</th>
-              <th class="text-left p-3 font-semibold text-gray-700">Indicators</th>
+              <th class="text-left p-3 font-semibold text-gray-700">Sub-score</th>
+              <th class="text-left p-3 font-semibold text-gray-700">Headline weight</th>
+              <th class="text-left p-3 font-semibold text-gray-700">Signals</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
-            {[
-              ['Labor & Income', '20%', 'UNRATE, PAYEMS, IC4WSA, CCSA, Real AHE YoY'],
-              ['Credit Stress', '20%', 'CC delinquency, Consumer loan delinquency, Charge-offs, NY Fed serious delinq transition, SLOOS tightening'],
-              ['Balance Sheet', '15%', 'Personal saving rate, Real DPI YoY, Debt service ratio, Net Worth/DPI'],
-              ['Spending & Demand', '15%', 'Real PCE 3-mo ann., Real retail sales YoY, TSA throughput vs 2019, Real PCE food svcs YoY'],
-              ['Sentiment', '10%', 'UMich Consumer Sentiment, OECD Consumer Confidence, NY Fed SCE missing payment prob.'],
-              ['Inflation', '10%', 'Headline CPI, Core CPI, Shelter CPI (all proximity to 2%), EIA gas prices'],
-              ['Big Ticket', '10%', '30yr mortgage rate, Auto loan rate (72mo), CC interest rate, Housing affordability index'],
-            ].map(([sub, weight, indicators]) => (
+            {subscoreRows.map(([subscore, weight, indicators]) => (
               <tr>
-                <td class="p-3 font-medium text-compass-navy">{sub}</td>
+                <td class="p-3 font-medium text-compass-navy">{subscore}</td>
                 <td class="p-3 text-compass-teal font-semibold">{weight}</td>
-                <td class="p-3 text-gray-500 text-xs">{indicators}</td>
+                <td class="p-3 text-gray-500">{indicators}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p class="text-xs text-gray-400 mt-2">Within each sub-score, indicators are equally weighted. Sub-scores are renormalized if an indicator has no data.</p>
+      <p class="text-xs text-gray-400 mt-2">
+        Within each sub-score, production v1 weights indicators equally unless a source is unavailable.
+        V2 will test modest leading/coincident/lagging tilts, but only if they improve validation.
+      </p>
     </section>
 
-    <!-- Recession back-test -->
     <section class="mb-10">
-      <h2 class="text-xl font-semibold text-compass-navy mb-3">Recession Back-Test</h2>
-      <p class="text-gray-700 text-sm leading-relaxed mb-4">
-        The scoring engine validates that the headline score drops ≥15 points by the NBER-designated recession peak (start of recession). Expected behavior:
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Validation Standard</h2>
+      <p class="text-gray-700 leading-relaxed text-sm mb-4">
+        The score is useful only if it behaves like a disciplined signal rather than a nice-looking
+        dashboard. Validation should be published alongside the methodology and rerun when transforms,
+        weights, or indicator sets change.
       </p>
       <div class="overflow-x-auto">
         <table class="w-full text-sm border border-gray-200 rounded-lg">
           <thead>
             <tr class="bg-gray-50">
-              <th class="text-left p-3 font-semibold text-gray-700">Recession</th>
-              <th class="text-left p-3 font-semibold text-gray-700">NBER Peak</th>
-              <th class="text-left p-3 font-semibold text-gray-700">Expected Score Drop</th>
+              <th class="text-left p-3 font-semibold text-gray-700">Test</th>
+              <th class="text-left p-3 font-semibold text-gray-700">What it checks</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
-            {[
-              ['1990–91', 'Jul 1990', '≥15 pts from pre-recession baseline'],
-              ['2001', 'Mar 2001', '≥15 pts from pre-recession baseline'],
-              ['2007–09', 'Dec 2007', '≥15 pts (score floors near 20 in 2009)'],
-              ['2020 COVID', 'Feb 2020', '≥15 pts (score craters by Apr 2020)'],
-            ].map(([rec, peak, drop]) => (
+            {validationRows.map(([test, detail]) => (
               <tr>
-                <td class="p-3 text-gray-700">{rec}</td>
-                <td class="p-3 text-gray-500">{peak}</td>
-                <td class="p-3 text-gray-500 text-xs">{drop}</td>
+                <td class="p-3 font-medium text-gray-700">{test}</td>
+                <td class="p-3 text-gray-500">{detail}</td>
               </tr>
             ))}
           </tbody>
@@ -148,22 +265,33 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       </div>
     </section>
 
-    <!-- Data sources and legal -->
     <section class="mb-10">
-      <h2 class="text-xl font-semibold text-compass-navy mb-3">Data Sources & Legal</h2>
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">V2 Roadmap</h2>
+      <ol class="space-y-3">
+        {roadmapRows.map(([step, detail]) => (
+          <li class="flex gap-3 text-sm text-gray-700 leading-relaxed">
+            <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-compass-navy text-white text-xs font-semibold">{step}</span>
+            <span>{detail}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="text-xl font-semibold text-compass-navy mb-3">Data Sources and Legal Notes</h2>
       <ul class="list-disc list-inside text-gray-700 space-y-2 text-sm leading-relaxed">
-        <li><strong>FRED</strong>: Federal Reserve Bank of St. Louis. Free API, attribution required.</li>
-        <li><strong>BLS</strong>: Bureau of Labor Statistics. Free API, public domain.</li>
-        <li><strong>BEA</strong>: Bureau of Economic Analysis. Free API, public domain.</li>
-        <li><strong>NY Fed HHDC</strong>: Household Debt and Credit. Free download, public data.</li>
-        <li><strong>NY Fed SCE</strong>: Survey of Consumer Expectations. Free download.</li>
-        <li><strong>EIA</strong>: U.S. Energy Information Administration. Free API, public domain.</li>
-        <li><strong>SEC EDGAR</strong>: 8-K Exhibit 99 earnings transcripts only. U.S. government system, public domain.</li>
-        <li><strong>Manheim MUVVI</strong>: Used for context only (not scored). Chart displays index level.</li>
-        <li><strong>Conference Board CCI</strong>: Redistribution restricted — not stored. Linked externally only.</li>
+        <li><strong>FRED</strong>: Federal Reserve Bank of St. Louis, including several federal and private-source series redistributed through FRED.</li>
+        <li><strong>BLS</strong>: Bureau of Labor Statistics labor data.</li>
+        <li><strong>BEA</strong>: Bureau of Economic Analysis income and spending data.</li>
+        <li><strong>NY Fed HHDC and SCE</strong>: Household credit and consumer-expectations data.</li>
+        <li><strong>EIA</strong>: U.S. retail gasoline price data.</li>
+        <li><strong>TSA</strong>: Daily throughput data used as a travel-demand proxy.</li>
+        <li><strong>SEC EDGAR</strong>: Public company filings used for earnings-call quote context.</li>
+        <li><strong>Manheim MUVVI and restricted vendor series</strong>: Used only where redistribution terms allow; otherwise linked or excluded from scoring.</li>
       </ul>
       <p class="text-xs text-gray-400 mt-4">
-        The Consumer Compass is not investment advice. Scores are statistical computations, not editorial recommendations. Source code is MIT-licensed.
+        The Consumer Compass is not investment advice. Scores are statistical computations and source
+        code is MIT-licensed.
       </p>
     </section>
   </div>

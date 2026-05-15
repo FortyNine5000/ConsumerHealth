@@ -46,6 +46,8 @@ export interface IndicatorRow {
   source_url: string | null;
   description: string | null;
   unit: string | null;
+  sparkline: number[];
+  score_sparkline: number[];
 }
 
 export interface IndicatorHistory {
@@ -162,7 +164,7 @@ export async function getAllIndicators(): Promise<IndicatorRow[]> {
   const client = getClient();
   try {
     const result = await client.execute(
-      `SELECT i.slug, i.name, i.subscore, i.series_id, i.frequency,
+      `SELECT i.id, i.slug, i.name, i.subscore, i.series_id, i.frequency,
               i.scoring_type, i.higher_is_better, i.weight_in_subscore, i.is_scored,
               s.name AS source_name, s.base_url AS source_url,
               i.description_md, i.units,
@@ -174,24 +176,51 @@ export async function getAllIndicators(): Promise<IndicatorRow[]> {
        ORDER BY i.subscore, i.weight_in_subscore DESC`
     );
 
-    return result.rows.map((r) => ({
-      slug: r[0] as string,
-      label: r[1] as string,
-      subscore: r[2] as string,
-      series_id: r[3] as string,
-      frequency: r[4] as string,
-      scoring_type: r[5] as string,
-      higher_is_better: r[6] as number | null,
-      weight_in_subscore: r[7] as number,
-      is_scored: r[8] as number,
-      source_name: r[9] as string | null,
-      source_url: r[10] as string | null,
-      description: r[11] as string | null,
-      unit: r[12] as string | null,
-      latest_score: r[13] as number | null,
-      latest_value: r[14] as number | null,
-      latest_date: r[15] as string | null,
+    const rows = result.rows.map((r) => ({
+      id: r[0] as number,
+      indicator: {
+        slug: r[1] as string,
+        label: r[2] as string,
+        subscore: r[3] as string,
+        series_id: r[4] as string,
+        frequency: r[5] as string,
+        scoring_type: r[6] as string,
+        higher_is_better: r[7] as number | null,
+        weight_in_subscore: r[8] as number,
+        is_scored: r[9] as number,
+        source_name: r[10] as string | null,
+        source_url: r[11] as string | null,
+        description: r[12] as string | null,
+        unit: r[13] as string | null,
+        latest_score: r[14] as number | null,
+        latest_value: r[15] as number | null,
+        latest_date: r[16] as string | null,
+        sparkline: [] as number[],
+        score_sparkline: [] as number[],
+      },
     }));
+
+    for (const row of rows) {
+      const spark = await client.execute({
+        sql: `SELECT raw_value, smoothed_score, score
+              FROM indicator_scores
+              WHERE indicator_id = ?
+              ORDER BY score_date DESC
+              LIMIT 48`,
+        args: [row.id],
+      });
+
+      row.indicator.sparkline = spark.rows
+        .map((r) => r[0] as number | null)
+        .filter((v): v is number => v != null)
+        .reverse();
+      row.indicator.score_sparkline = spark.rows
+        .map((r) => (r[1] ?? r[2]) as number | null)
+        .filter((v): v is number => v != null)
+        .reverse();
+    }
+
+    return rows.map((r) => r.indicator);
   } finally {
     client.close();
   }
@@ -230,6 +259,8 @@ export async function getIndicatorBySlug(slug: string): Promise<IndicatorRow | n
       latest_score: null,
       latest_value: null,
       latest_date: null,
+      sparkline: [],
+      score_sparkline: [],
     };
   } finally {
     client.close();

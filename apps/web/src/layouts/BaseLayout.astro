@@ -17,6 +17,18 @@ const {
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const fullTitle = title === 'The Consumer Compass' ? title : `${title} · The Consumer Compass`;
+const pathname = Astro.url.pathname;
+const navItems = [
+  { href: '/indicators', label: 'Indicators' },
+  { href: '/', label: 'Sub-scores' },
+  { href: '/methodology', label: 'Methodology' },
+  { href: '/quotes', label: 'Quotes' },
+];
+
+function isActive(href: string) {
+  if (href === '/') return pathname === '/' || pathname.startsWith('/subscores');
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 ---
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth">
@@ -44,30 +56,42 @@ const fullTitle = title === 'The Consumer Compass' ? title : `${title} · The Co
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap"
       rel="stylesheet"
     />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" href="/favicon.png" />
   </head>
-  <body class="bg-gray-50 text-gray-900 font-sans antialiased">
-    <header class="bg-compass-navy text-white">
-      <nav class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-        <a href="/" class="flex items-center gap-2 font-semibold text-lg tracking-tight hover:opacity-90 transition-opacity">
-          <svg class="w-6 h-6 text-compass-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 2 L14.4 9.6 L22 12 L14.4 14.4 L12 22 L9.6 14.4 L2 12 L9.6 9.6 Z"/>
+  <body class="bg-[#fafaf7] text-[#0e1116] font-sans antialiased">
+    <header class="bg-[#fafaf7] text-[#0e1116] border-b border-[#e6e3da]">
+      <nav class="max-w-7xl mx-auto px-5 sm:px-8 lg:px-14 h-16 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-3 font-medium text-[15px] hover:opacity-80 transition-opacity">
+          <svg class="w-[22px] h-[22px]" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+            <circle cx="11" cy="11" r="10.5" stroke="currentColor" stroke-width="1" />
+            <path d="M11 3 L13 11 L11 19 L9 11 Z" fill="#1f3df5" />
+            <circle cx="11" cy="11" r="1.6" fill="currentColor" />
           </svg>
           Consumer Compass
         </a>
-        <div class="hidden sm:flex items-center gap-6 text-sm text-gray-300">
-          <a href="/indicators" class="hover:text-white transition-colors">Indicators</a>
-          <a href="/quotes" class="hover:text-white transition-colors">Quotes</a>
-          <a href="/methodology" class="hover:text-white transition-colors">Methodology</a>
+        <div class="hidden sm:flex items-center gap-7 text-[13px] text-[#7a8290]">
+          {navItems.map((item) => {
+            const active = isActive(item.href);
+            return (
+              <a
+                href={item.href}
+                class={`relative hover:text-[#0e1116] transition-colors ${active ? 'text-[#0e1116]' : ''}`}
+              >
+                {item.label}
+                {active && (
+                  <span class="absolute left-0 right-0 -bottom-[23px] h-px bg-[#0e1116]" />
+                )}
+              </a>
+            );
+          })}
         </div>
         <!-- Mobile menu placeholder -->
-        <button class="sm:hidden text-gray-300 hover:text-white" aria-label="Menu">
+        <button class="sm:hidden text-[#7a8290] hover:text-[#0e1116]" aria-label="Menu">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 6h16M4 12h16M4 18h16"/>
           </svg>
@@ -79,8 +103,8 @@ const fullTitle = title === 'The Consumer Compass' ? title : `${title} · The Co
       <slot />
     </main>
 
-    <footer class="bg-compass-navy text-gray-400 mt-16">
-      <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <footer class="bg-[#0e1116] text-gray-400 mt-16">
+      <div class="max-w-7xl mx-auto px-5 sm:px-8 lg:px-14 py-10">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 text-sm">
           <div>
             <div class="text-white font-semibold mb-2">The Consumer Compass</div>
