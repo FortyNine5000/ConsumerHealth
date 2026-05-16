@@ -120,6 +120,15 @@ function normalizeDisplayValue(slug: string, value: number | null) {
   return value;
 }
 
+function rollingAverage(values: number[], windowSize: number) {
+  return values.map((_, index) => {
+    const window = values
+      .slice(Math.max(0, index - windowSize + 1), index + 1)
+      .filter((value) => Number.isFinite(value));
+    return window.reduce((sum, value) => sum + value, 0) / window.length;
+  });
+}
+
 function deltaLabel(frequency: string) {
   if (frequency === 'weekly') return 'wk/wk';
   if (frequency === 'quarterly') return 'qtr/qtr';
@@ -249,11 +258,12 @@ function weightedGroupScore() {
 const componentScore = weightedGroupScore();
 const headlineScore = componentScore ?? headline?.score ?? null;
 const headlineStatus = statusFor(headlineScore);
-const headlineScores = headlineHistory.slice(-60).map((row) => row.score);
+const headlineRawScores = headlineHistory.slice(-60).map((row) => row.score);
 const scoreMismatch = headline?.score != null && componentScore != null && Math.abs(headline.score - componentScore) > 1;
-if (scoreMismatch && headlineScores.length > 0 && headlineScore != null) {
-  headlineScores[headlineScores.length - 1] = headlineScore;
+if (scoreMismatch && headlineRawScores.length > 0 && headlineScore != null) {
+  headlineRawScores[headlineRawScores.length - 1] = headlineScore;
 }
+const headlineScores = rollingAverage(headlineRawScores, 3);
 const headlineSpark = buildSpark(headlineScores, 460, 130, 6, 0, 100, 30, 6);
 const headlineScoreText = headlineScore == null ? '-' : String(Math.round(headlineScore));
 const updatedLabel = formatFullDate(headline?.score_date ?? null);
@@ -302,7 +312,7 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
         {headlineSpark ? (
           <div class="composite-history">
             <div class="history-head">
-              <span>Composite · 5-year history</span>
+              <span>Composite · 3-month trend</span>
               <span>0-100 scale</span>
             </div>
             <svg viewBox="0 0 460 130" role="img" aria-label="Composite score history">

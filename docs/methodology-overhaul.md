@@ -27,6 +27,7 @@ Before changing the headline formula, v1 needs two mechanical corrections:
 - Avoid headline re-normalization around only the fastest-updating indicators during a partial current month.
 - Normalize the FRED Z.1 household net-worth series to the same dollar scale as disposable personal income before calculating net worth / DPI.
 - Treat the regular small step-like moves from quarterly refreshes as a release-cadence artifact to explain and attribute, not as consumer seasonality.
+- Treat the range-bound look in recent years as a known limitation of a pure expanding-percentile state score; v2 needs explicit momentum and medium-trend components to capture gradual erosion.
 
 ## Recommended v2 signal stack
 
