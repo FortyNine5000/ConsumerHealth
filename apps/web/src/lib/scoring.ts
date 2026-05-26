@@ -44,8 +44,8 @@ export const SUBSCORE_LABELS: Record<string, string> = {
 
 export const SUBSCORE_DESCRIPTIONS: Record<string, string> = {
   labor_income: 'Employment conditions, payroll growth, claims, and real wage gains.',
-  household_balance_sheet: 'Savings rate, real income growth, debt service burden, and net worth.',
-  credit_stress: 'Delinquency rates, charge-offs, serious delinquency transitions, and lending standards.',
+  household_balance_sheet: 'Savings, real income growth, debt-to-income, debt service, and net worth.',
+  credit_stress: 'Delinquencies, charge-offs, student-loan stress, serious delinquency transitions, and lending standards.',
   spending_demand: 'Real PCE momentum, retail sales, travel demand, and food services.',
   sentiment_expectations: 'Consumer confidence, inflation expectations, and financial distress surveys.',
   inflation_affordability: 'CPI proximity to 2% target, shelter costs, and gasoline prices.',

@@ -26,7 +26,7 @@ const transformRows = [
   ['Nonfarm Payrolls (PAYEMS)', 'Month-over-month change, then 3-month rolling average'],
   ['Real Hourly Earnings, DPI, Retail Sales, PCE Food Services', 'Year-over-year percent change'],
   ['Real PCE momentum', '3-month annualized rate of change'],
-  ['Net Worth / DPI', 'Household net worth divided by annualized disposable personal income'],
+  ['Debt / DPI and Net Worth / DPI', 'Household debt and net worth compared with disposable personal income'],
   ['CPI, Core CPI, Shelter CPI', 'Year-over-year inflation scored by distance from 2%'],
   ['TSA Throughput', 'Daily throughput compared with 2019 same-period baseline'],
   ['Rates, delinquencies, claims, sentiment, saving rate', 'Economically meaningful level'],
@@ -34,8 +34,8 @@ const transformRows = [
 
 const subscoreRows = [
   ['Labor & Income', '20%', 'UNRATE, payroll growth, initial claims, continued claims, real wages'],
-  ['Credit Stress', '20%', 'Bank delinquencies, charge-offs, NY Fed serious delinquency transitions, SLOOS tightening'],
-  ['Balance Sheet', '15%', 'Saving rate, real income growth, debt service ratio, net worth / DPI'],
+  ['Credit Stress', '20%', 'Bank delinquencies, charge-offs, NY Fed credit-card and student-loan serious delinquency transitions, SLOOS tightening'],
+  ['Balance Sheet', '15%', 'Saving rate, real income growth, debt / DPI, debt service ratio, net worth / DPI'],
   ['Spending & Demand', '15%', 'Real PCE momentum, real retail sales, travel demand, food services'],
   ['Sentiment', '10%', 'UMich sentiment, OECD confidence proxy, NY Fed missed-payment probability'],
   ['Inflation', '10%', 'Headline CPI, core CPI, shelter CPI, gasoline prices'],
@@ -104,6 +104,12 @@ const roadmapRows = [
         data frequency, not ordinary consumer seasonality. The v2 work should make those effects
         visible through staleness and attribution rather than letting them masquerade as a clean
         economic signal.
+      </p>
+      <p class="text-sm text-gray-700 leading-relaxed mt-3">
+        The debt stack now explicitly separates the amount owed from the payment burden: FRED Z.1
+        household debt / DPI captures broad leverage, while the Fed household debt-service ratio
+        captures required payments. NY Fed student-loan serious-delinquency transitions add a
+        borrower-stress signal that aggregate debt-service data can miss.
       </p>
       <p class="text-sm text-gray-700 leading-relaxed mt-3">
         The range-bound look over the last several years is also a v1 limitation: an expanding-percentile

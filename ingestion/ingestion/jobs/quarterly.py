@@ -35,6 +35,7 @@ QUARTERLY_FRED_SERIES = [
     "DRCCLOBS",         # Subprime CC Delinquency (supporting)
     # Balance Sheet (lagging)
     "TDSP",             # Household Debt Service Ratio
+    "BOGZ1FL154104016Q",# Household mortgages + consumer credit / DPI
     "BOGZ1FL192090005Q",# Household Net Worth (Z.1)
     # Big-Ticket
     "TERMCBCCALLNS",    # Credit Card Interest Rate

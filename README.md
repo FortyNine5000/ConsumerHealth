@@ -2,13 +2,13 @@
 
 **Where the data meets the narrative.** 
 
-A free, public dashboard tracking U.S. consumer financial health with a 0–100 headline score, 7 sub-scores, 30 underlying indicators, and an earnings-call quote tracker that surfaces the gap between what the data says and what corporations are saying.
+A free, public dashboard tracking U.S. consumer financial health with a 0–100 headline score, 7 sub-scores, 31 underlying indicators, and an earnings-call quote tracker that surfaces the gap between what the data says and what corporations are saying.
 
 ## What It Does
 
 - **Headline Consumer Health Score (0–100)** — a weighted composite of 7 sub-scores
 - **7 Sub-Scores** — Labor & Income, Household Balance Sheet, Credit Stress, Spending & Demand, Sentiment & Expectations, Inflation & Affordability, Big-Ticket Affordability
-- **30 Indicators** — sourced from FRED, BLS, BEA, NY Fed, Census, EIA, Freddie Mac, TSA, and more — all free, citable, no paid vendor dependency
+- **31 Indicators** — sourced from FRED, BLS, BEA, NY Fed, Census, EIA, Freddie Mac, TSA, and more — all free, citable, no paid vendor dependency
 - **Earnings-Call Quote Tracker** — catalogs what banks, card networks, retailers, restaurants, and auto companies say about the consumer, tagged as supporting or contradicting the underlying data
 
 The public site is intentionally simple: `/` is the indicator dashboard, `/methodology` explains the scoring, and `/earnings-quotes` houses the earnings-call quote tracker.
@@ -110,11 +110,11 @@ npm run dev
 
 | Source | What We Pull | Series |
 |--------|-------------|--------|
-| FRED (St. Louis Fed) | Most indicators | UNRATE, PAYEMS, IC4WSA, CCSA, CES0500000013, PSAVERT, DSPIC96, TDSP, BOGZ1FL192090005Q, DRCCLACBS, DRCLACBS, CORCCACBS, DRTSCLCC, PCEC96, RRSFS, UMCSENT, CSCICP03USM665S, CPIAUCSL, CPILFESL, CUSR0000SAH1, MORTGAGE30US, RIFLPBCIANM72NM, TERMCBCCALLNS, + supporting |
+| FRED (St. Louis Fed) | Most indicators | UNRATE, PAYEMS, IC4WSA, CCSA, CES0500000013, PSAVERT, DSPIC96, TDSP, BOGZ1FL154104016Q, BOGZ1FL192090005Q, DRCCLACBS, DRCLACBS, CORCCACBS, DRTSCLCC, PCEC96, RRSFS, UMCSENT, CSCICP03USM665S, CPIAUCSL, CPILFESL, CUSR0000SAH1, MORTGAGE30US, RIFLPBCIANM72NM, TERMCBCCALLNS, + supporting |
 | BLS | Labor market detail | LNS*, CES*, JTS* |
 | BEA | PCE food services, personal income | NIPA T20600 |
 | EIA | Retail gasoline prices | PET.EMM_EPMR_PTE_NUS_DPG.W |
-| NY Fed HHDC | Credit delinquency transitions | Quarterly XLSX |
+| NY Fed HHDC | Credit-card and student-loan serious delinquency transitions | Quarterly XLSX |
 | NY Fed SCE | Probability of missing payment | Monthly |
 | TSA | Travel demand vs. 2019 | Daily scrape |
 | Freddie Mac | Mortgage rates | Via FRED MORTGAGE30US |

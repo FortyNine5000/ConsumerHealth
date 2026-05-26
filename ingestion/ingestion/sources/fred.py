@@ -52,6 +52,7 @@ FRED_ALL_SERIES: list[str] = [
     "DSPIC96",          # Real Disposable Personal Income
     "DSPI",             # Nominal DPI (supporting: net worth denominator)
     "TDSP",             # Household Debt Service Ratio
+    "BOGZ1FL154104016Q",# Household mortgages + consumer credit / DPI
     "BOGZ1FL192090005Q",# Household Net Worth (Z.1, quarterly)
     # ── Credit Stress (scored) ───────────────────────────────────────────────
     "DRCCLACBS",        # Credit Card Delinquency Rate, All Banks

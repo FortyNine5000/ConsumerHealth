@@ -1,7 +1,7 @@
 """
 Canonical indicator registry — seeded into the `indicators` table on first run.
 
-Contains all 30 scored indicators (v1) plus ~15 supporting series that appear
+Contains all 31 scored indicators (v1) plus ~15 supporting series that appear
 on indicator library pages but don't enter the headline score.
 
 Call seed(client) once; subsequent calls are idempotent (INSERT OR IGNORE on slug).
@@ -149,7 +149,7 @@ INDICATORS: list[dict] = [
     },
 
     # ── Sub-score 2: Household Balance Sheet (headline weight 15%) ────────────
-    # 4 indicators, each weight 0.25
+    # 5 indicators, each weight 0.20
     {
         "slug": "psavert",
         "series_id": "PSAVERT",
@@ -160,7 +160,7 @@ INDICATORS: list[dict] = [
         "units": "percent of DPI",
         "higher_is_better": True,
         "scoring_type": "percentile",
-        "weight_in_subscore": 0.25,
+        "weight_in_subscore": 0.20,
         "lcl_class": "coincident",
         "is_scored": True,
         "backfill_start": "1990-01-01",
@@ -186,7 +186,7 @@ INDICATORS: list[dict] = [
         "units": "percent change",
         "higher_is_better": True,
         "scoring_type": "percentile",
-        "weight_in_subscore": 0.25,
+        "weight_in_subscore": 0.20,
         "lcl_class": "coincident",
         "is_scored": True,
         "backfill_start": "1990-01-01",
@@ -208,7 +208,7 @@ INDICATORS: list[dict] = [
         "units": "percent of DPI",
         "higher_is_better": False,
         "scoring_type": "percentile",
-        "weight_in_subscore": 0.25,
+        "weight_in_subscore": 0.20,
         "lcl_class": "lagging",
         "is_scored": True,
         "backfill_start": "1990-01-01",
@@ -221,6 +221,37 @@ INDICATORS: list[dict] = [
         ),
     },
     {
+        "slug": "household_debt_dpi",
+        "series_id": "BOGZ1FL154104016Q",
+        "source": "fred",
+        "name": "Household Debt / Disposable Income Ratio",
+        "subscore": BALANCE,
+        "frequency": "quarterly",
+        "units": "percent of DPI",
+        "higher_is_better": False,
+        "scoring_type": "percentile",
+        "weight_in_subscore": 0.20,
+        "lcl_class": "lagging",
+        "is_scored": True,
+        "backfill_start": "1990-01-01",
+        "notes": (
+            "FRED Z.1 series: one-to-four-family residential mortgages plus consumer "
+            "credit as a percentage of disposable personal income. This tracks the "
+            "broad household debt / income measure commonly cited near 80%."
+        ),
+        "why_it_matters_md": (
+            "Debt service captures payment burden, but debt / income captures the "
+            "stock of household leverage before rate resets, refinancing, or income "
+            "shocks show up in payments. Higher leverage reduces flexibility and "
+            "can make consumers more sensitive to labor, rate, and asset-price shocks."
+        ),
+        "limitations_md": (
+            "This is an aggregate Z.1 ratio, dominated by mortgage debt and revised "
+            "with Financial Accounts releases. It does not reveal distributional "
+            "stress across age, income, credit score, or student-loan borrowers."
+        ),
+    },
+    {
         "slug": "networth_dpi_ratio",
         "series_id": "BOGZ1FL192090005Q",
         "source": "fred",
@@ -230,7 +261,7 @@ INDICATORS: list[dict] = [
         "units": "ratio",
         "higher_is_better": True,
         "scoring_type": "percentile",
-        "weight_in_subscore": 0.25,
+        "weight_in_subscore": 0.20,
         "lcl_class": "lagging",
         "is_scored": True,
         "backfill_start": "1990-01-01",
@@ -249,7 +280,7 @@ INDICATORS: list[dict] = [
     },
 
     # ── Sub-score 3: Credit Stress (headline weight 20%) ──────────────────────
-    # 5 indicators, each weight 0.20
+    # 6 indicators, each weight 0.166667
     {
         "slug": "drcclacbs",
         "series_id": "DRCCLACBS",
@@ -260,7 +291,7 @@ INDICATORS: list[dict] = [
         "units": "percent",
         "higher_is_better": False,
         "scoring_type": "percentile",
-        "weight_in_subscore": 0.20,
+        "weight_in_subscore": 0.166667,
         "lcl_class": "lagging",
         "is_scored": True,
         "backfill_start": "1990-01-01",
@@ -282,7 +313,7 @@ INDICATORS: list[dict] = [
         "units": "percent",
         "higher_is_better": False,
         "scoring_type": "percentile",
-        "weight_in_subscore": 0.20,
+        "weight_in_subscore": 0.166667,
         "lcl_class": "lagging",
         "is_scored": True,
         "backfill_start": "1990-01-01",
@@ -303,7 +334,7 @@ INDICATORS: list[dict] = [
         "units": "percent",
         "higher_is_better": False,
         "scoring_type": "percentile",
-        "weight_in_subscore": 0.20,
+        "weight_in_subscore": 0.166667,
         "lcl_class": "lagging",
         "is_scored": True,
         "backfill_start": "1990-01-01",
@@ -324,7 +355,7 @@ INDICATORS: list[dict] = [
         "units": "percent",
         "higher_is_better": False,
         "scoring_type": "percentile",
-        "weight_in_subscore": 0.20,
+        "weight_in_subscore": 0.166667,
         "lcl_class": "lagging",
         "is_scored": True,
         "backfill_start": "2003-01-01",
@@ -341,6 +372,38 @@ INDICATORS: list[dict] = [
         ),
     },
     {
+        "slug": "nyfed_student_loan_serious_delinq",
+        "series_id": "NYFED_HHDC_STUDENT_LOAN_SERIOUS_DELINQ",
+        "source": "nyfed",
+        "name": "NY Fed HHDC — Student Loan Transition to Serious Delinquency (90+)",
+        "subscore": CREDIT,
+        "frequency": "quarterly",
+        "units": "percent",
+        "higher_is_better": False,
+        "scoring_type": "percentile",
+        "weight_in_subscore": 0.166667,
+        "lcl_class": "lagging",
+        "is_scored": True,
+        "backfill_start": "2004-01-01",
+        "notes": (
+            "Source: NY Fed Household Debt and Credit (HHDC) XLSX, transition into "
+            "serious delinquency for student loans. Published quarterly. The "
+            "pandemic-era federal student-loan reporting pause means 2020-2024 "
+            "readings need special interpretation."
+        ),
+        "why_it_matters_md": (
+            "Student-loan delinquency is a concentrated stress signal for younger "
+            "and middle-income households. It can hit credit scores and borrowing "
+            "capacity even when aggregate debt-service or delinquency measures look "
+            "benign."
+        ),
+        "limitations_md": (
+            "Federal student-loan payment and credit-reporting policy changed during "
+            "and after the pandemic. This series is useful as a stress signal but "
+            "should not be treated as a perfectly continuous credit-cycle measure."
+        ),
+    },
+    {
         "slug": "drtsclcc",
         "series_id": "DRTSCLCC",
         "source": "fred",
@@ -350,7 +413,7 @@ INDICATORS: list[dict] = [
         "units": "net percent",
         "higher_is_better": False,
         "scoring_type": "percentile",
-        "weight_in_subscore": 0.20,
+        "weight_in_subscore": 0.166667,
         "lcl_class": "leading",
         "is_scored": True,
         "backfill_start": "1996-01-01",

@@ -32,7 +32,7 @@ from ingestion.db import (
     upsert_subscores,
 )
 from ingestion.seed_indicators import seed as seed_indicators
-from ingestion.sources import bea, bls, eia, fred
+from ingestion.sources import bea, bls, eia, fred, nyfed_hhdc
 from ingestion.transforms.percentile import (
     score_indicator,
     transform_mom_3mo_ann,
@@ -284,20 +284,25 @@ async def run() -> None:
         eia_rows = await eia.ingest_gas_prices(client)
         log.info("backfill.ingest.eia.ok", rows=eia_rows)
 
-        # 6. Score all indicators (expanding-window percentile)
+        # 6. Ingest NY Fed HHDC transition rates
+        log.info("backfill.ingest.nyfed_hhdc.start")
+        hhdc_rows = await nyfed_hhdc.ingest_transition_rates(client)
+        log.info("backfill.ingest.nyfed_hhdc.ok", rows=hhdc_rows)
+
+        # 7. Score all indicators (expanding-window percentile)
         log.info("backfill.score.start")
         indicators = await get_all_indicators(client, scored_only=False)
         all_scores_df = await _score_all_indicators(client, indicators)
         log.info("backfill.score.ok", rows=len(all_scores_df))
 
-        # 7. Compute sub-scores and headline for all dates
+        # 8. Compute sub-scores and headline for all dates
         log.info("backfill.aggregate.start")
         await _compute_subscores_and_headline(client, all_scores_df)
         log.info("backfill.aggregate.ok")
 
-        # 8. Log success
+        # 9. Log success
         finished_at = datetime.datetime.utcnow().isoformat() + "Z"
-        total_rows = fred_rows + bls_rows + bea_rows + eia_rows
+        total_rows = fred_rows + bls_rows + bea_rows + eia_rows + hhdc_rows
         await log_update(
             client,
             job_name="backfill",
