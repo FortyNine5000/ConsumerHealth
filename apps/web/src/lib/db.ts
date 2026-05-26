@@ -210,7 +210,7 @@ export async function getAllIndicators(): Promise<IndicatorRow[]> {
               FROM indicator_scores
               WHERE indicator_id = ?
               ORDER BY score_date DESC
-              LIMIT 48`,
+              LIMIT 2300`,
         args: [row.id],
       });
 

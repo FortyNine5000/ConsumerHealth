@@ -162,17 +162,53 @@ function formatRangeLabel(dates: string[]) {
   return `${formatAxisDate(dates[0])} - ${formatAxisDate(dates[dates.length - 1])}`;
 }
 
-function formatWindowLabel(dates: string[], frequency: string) {
-  const count = dates.length;
-  if (count < 2) return 'History pending';
-  const unit = frequency === 'quarterly'
-    ? 'quarters'
-    : frequency === 'weekly'
-      ? 'weeks'
-      : frequency === 'daily'
-        ? 'days'
-        : 'months';
-  return `Last ${count} ${unit}`;
+function latestDateString(dates: Array<string | null | undefined>) {
+  const valid = dates.filter((date): date is string => Boolean(date)).sort();
+  return valid.at(-1) ?? null;
+}
+
+function yearForDate(dateStr: string | null) {
+  if (!dateStr) return new Date().getUTCFullYear();
+  return new Date(`${dateStr}T00:00:00Z`).getUTCFullYear();
+}
+
+function selectTimeline(
+  values: number[],
+  dates: string[],
+  fiveYearStart: string,
+  twoYearStart: string,
+) {
+  const paired = values
+    .map((value, index) => ({ value, date: dates[index] }))
+    .filter((point): point is { value: number; date: string } => (
+      Number.isFinite(point.value) && Boolean(point.date)
+    ));
+
+  if (paired.length < 2) {
+    return { values: paired.map((point) => point.value), dates: paired.map((point) => point.date), label: 'History pending' };
+  }
+
+  const hasFiveYearBase = paired.some((point) => point.date <= fiveYearStart);
+  const hasTwoYearBase = paired.some((point) => point.date <= twoYearStart);
+  const start = hasFiveYearBase ? fiveYearStart : twoYearStart;
+  let window = paired.filter((point) => point.date >= start);
+  let label = hasFiveYearBase ? 'Last 5 years' : 'Last 2 years';
+
+  if (!hasFiveYearBase && !hasTwoYearBase) {
+    window = paired;
+    label = 'Available history';
+  }
+
+  if (window.length < 2) {
+    window = paired.slice(-2);
+    label = 'Available history';
+  }
+
+  return {
+    values: window.map((point) => point.value),
+    dates: window.map((point) => point.date),
+    label,
+  };
 }
 
 function buildSpark(
@@ -203,23 +239,30 @@ function buildSpark(
 }
 
 const latestSubscoreBySlug = new Map(latestSubscores.map((s) => [s.slug, s]));
+const referenceDate = latestDateString([
+  headline?.score_date,
+  ...indicators.map((indicator) => indicator.latest_date),
+]);
+const referenceYear = yearForDate(referenceDate);
+const fiveYearStart = `${referenceYear - 5}-01-01`;
+const twoYearStart = `${referenceYear - 2}-01-01`;
 
 const cards = scored.map((indicator) => {
   const normalizedRawSparkline = indicator.sparkline.map((value) => normalizeDisplayValue(indicator.slug, value) ?? value);
   const usesRawSparkline = normalizedRawSparkline.length > 1;
-  const sparkline = usesRawSparkline
+  const fullSparkline = usesRawSparkline
     ? normalizedRawSparkline
     : indicator.score_sparkline;
-  const sparklineDates = usesRawSparkline
+  const fullSparklineDates = usesRawSparkline
     ? indicator.sparkline_dates
     : indicator.score_sparkline_dates;
+  const timeline = selectTimeline(fullSparkline, fullSparklineDates, fiveYearStart, twoYearStart);
   const value = normalizeDisplayValue(indicator.slug, indicator.latest_value);
   const delta = normalizedRawSparkline.length > 1
     ? normalizedRawSparkline[normalizedRawSparkline.length - 1] - normalizedRawSparkline[normalizedRawSparkline.length - 2]
     : null;
   const score = indicator.latest_score;
   const status = statusFor(score);
-  const spark = buildSpark(sparkline);
   return {
     slug: indicator.slug,
     subscore: indicator.subscore,
@@ -243,13 +286,13 @@ const cards = scored.map((indicator) => {
     sourceUrl: indicator.source_url,
     description: indicator.description,
     latestDate: formatFullDate(indicator.latest_date),
-    sparkline,
-    sparklineDates,
+    sparkline: timeline.values,
+    sparklineDates: timeline.dates,
     scoreSparkline: indicator.score_sparkline,
     scoreSparklineDates: indicator.score_sparkline_dates,
-    spark,
-    historyRange: formatRangeLabel(sparklineDates),
-    historyWindow: formatWindowLabel(sparklineDates, indicator.frequency),
+    spark: buildSpark(timeline.values),
+    historyRange: formatRangeLabel(timeline.dates),
+    historyWindow: timeline.label,
   };
 });
 
@@ -294,9 +337,14 @@ function weightedGroupScore() {
 const componentScore = weightedGroupScore();
 const headlineScore = componentScore ?? headline?.score ?? null;
 const headlineStatus = statusFor(headlineScore);
-const headlineWindow = headlineHistory.slice(-60);
-const headlineRawScores = headlineWindow.map((row) => row.score);
-const headlineDates = headlineWindow.map((row) => row.score_date);
+const headlineTimeline = selectTimeline(
+  headlineHistory.map((row) => row.score),
+  headlineHistory.map((row) => row.score_date),
+  fiveYearStart,
+  twoYearStart,
+);
+const headlineRawScores = [...headlineTimeline.values];
+const headlineDates = headlineTimeline.dates;
 const scoreMismatch = headline?.score != null && componentScore != null && Math.abs(headline.score - componentScore) > 1;
 if (scoreMismatch && headlineRawScores.length > 0 && headlineScore != null) {
   headlineRawScores[headlineRawScores.length - 1] = headlineScore;
@@ -306,9 +354,7 @@ const headlineSpark = buildSpark(headlineScores, 460, 130, 6, 0, 100, 30, 6);
 const headlineScoreText = headlineScore == null ? '-' : String(Math.round(headlineScore));
 const updatedLabel = formatFullDate(headline?.score_date ?? null);
 const headlineRangeLabel = formatRangeLabel(headlineDates);
-const headlineWindowLabel = headlineDates.length > 1
-  ? `Last ${headlineDates.length} months`
-  : 'History pending';
+const headlineWindowLabel = headlineTimeline.label;
 const headlineMidLabel = headlineDates.length > 2
   ? formatAxisDate(headlineDates[Math.floor((headlineDates.length - 1) / 2)])
   : '';
@@ -466,6 +512,7 @@ const headlineMidLabel = headlineDates.length > 2
                       </svg>
                       <div class="spark-axis">
                         <span>{formatAxisDate(card.sparklineDates[0] ?? null)}</span>
+                        <span>{card.historyWindow}</span>
                         <span>{formatAxisDate(card.sparklineDates[card.sparklineDates.length - 1] ?? null)}</span>
                       </div>
                     </div>
@@ -915,13 +962,22 @@ const headlineMidLabel = headlineDates.length > 2
   }
 
   .spark-axis {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 8px;
     margin-top: 4px;
     color: var(--muted);
     font-family: "JetBrains Mono", Consolas, monospace;
     font-size: 9px;
     text-transform: uppercase;
+  }
+
+  .spark-axis span:nth-child(2) {
+    color: var(--ink-2);
+  }
+
+  .spark-axis span:last-child {
+    text-align: right;
   }
 
   .card-spark-empty {
