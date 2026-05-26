@@ -47,7 +47,9 @@ export interface IndicatorRow {
   description: string | null;
   unit: string | null;
   sparkline: number[];
+  sparkline_dates: string[];
   score_sparkline: number[];
+  score_sparkline_dates: string[];
 }
 
 export interface IndicatorHistory {
@@ -196,13 +198,15 @@ export async function getAllIndicators(): Promise<IndicatorRow[]> {
         latest_value: r[15] as number | null,
         latest_date: r[16] as string | null,
         sparkline: [] as number[],
+        sparkline_dates: [] as string[],
         score_sparkline: [] as number[],
+        score_sparkline_dates: [] as string[],
       },
     }));
 
     for (const row of rows) {
       const spark = await client.execute({
-        sql: `SELECT raw_value, smoothed_score, score
+        sql: `SELECT score_date, raw_value, smoothed_score, score
               FROM indicator_scores
               WHERE indicator_id = ?
               ORDER BY score_date DESC
@@ -210,14 +214,18 @@ export async function getAllIndicators(): Promise<IndicatorRow[]> {
         args: [row.id],
       });
 
-      row.indicator.sparkline = spark.rows
-        .map((r) => r[0] as number | null)
-        .filter((v): v is number => v != null)
-        .reverse();
-      row.indicator.score_sparkline = spark.rows
-        .map((r) => (r[1] ?? r[2]) as number | null)
-        .filter((v): v is number => v != null)
-        .reverse();
+      const orderedSparkRows = spark.rows.slice().reverse();
+      const rawRows = orderedSparkRows
+        .map((r) => ({ date: r[0] as string, value: r[1] as number | null }))
+        .filter((r): r is { date: string; value: number } => r.value != null);
+      const scoreRows = orderedSparkRows
+        .map((r) => ({ date: r[0] as string, value: (r[2] ?? r[3]) as number | null }))
+        .filter((r): r is { date: string; value: number } => r.value != null);
+
+      row.indicator.sparkline = rawRows.map((r) => r.value);
+      row.indicator.sparkline_dates = rawRows.map((r) => r.date);
+      row.indicator.score_sparkline = scoreRows.map((r) => r.value);
+      row.indicator.score_sparkline_dates = scoreRows.map((r) => r.date);
     }
 
     return rows.map((r) => r.indicator);
@@ -260,7 +268,9 @@ export async function getIndicatorBySlug(slug: string): Promise<IndicatorRow | n
       latest_value: null,
       latest_date: null,
       sparkline: [],
+      sparkline_dates: [],
       score_sparkline: [],
+      score_sparkline_dates: [],
     };
   } finally {
     client.close();

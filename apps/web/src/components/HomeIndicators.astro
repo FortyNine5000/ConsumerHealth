@@ -147,6 +147,34 @@ function formatFullDate(dateStr: string | null) {
   });
 }
 
+function formatAxisDate(dateStr: string | null) {
+  if (!dateStr) return '';
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function formatRangeLabel(dates: string[]) {
+  if (dates.length < 2) return 'History pending';
+  return `${formatAxisDate(dates[0])} - ${formatAxisDate(dates[dates.length - 1])}`;
+}
+
+function formatWindowLabel(dates: string[], frequency: string) {
+  const count = dates.length;
+  if (count < 2) return 'History pending';
+  const unit = frequency === 'quarterly'
+    ? 'quarters'
+    : frequency === 'weekly'
+      ? 'weeks'
+      : frequency === 'daily'
+        ? 'days'
+        : 'months';
+  return `Last ${count} ${unit}`;
+}
+
 function buildSpark(
   values: number[],
   width = 220,
@@ -178,9 +206,13 @@ const latestSubscoreBySlug = new Map(latestSubscores.map((s) => [s.slug, s]));
 
 const cards = scored.map((indicator) => {
   const normalizedRawSparkline = indicator.sparkline.map((value) => normalizeDisplayValue(indicator.slug, value) ?? value);
-  const sparkline = normalizedRawSparkline.length > 1
+  const usesRawSparkline = normalizedRawSparkline.length > 1;
+  const sparkline = usesRawSparkline
     ? normalizedRawSparkline
     : indicator.score_sparkline;
+  const sparklineDates = usesRawSparkline
+    ? indicator.sparkline_dates
+    : indicator.score_sparkline_dates;
   const value = normalizeDisplayValue(indicator.slug, indicator.latest_value);
   const delta = normalizedRawSparkline.length > 1
     ? normalizedRawSparkline[normalizedRawSparkline.length - 1] - normalizedRawSparkline[normalizedRawSparkline.length - 2]
@@ -212,8 +244,12 @@ const cards = scored.map((indicator) => {
     description: indicator.description,
     latestDate: formatFullDate(indicator.latest_date),
     sparkline,
+    sparklineDates,
     scoreSparkline: indicator.score_sparkline,
+    scoreSparklineDates: indicator.score_sparkline_dates,
     spark,
+    historyRange: formatRangeLabel(sparklineDates),
+    historyWindow: formatWindowLabel(sparklineDates, indicator.frequency),
   };
 });
 
@@ -258,7 +294,9 @@ function weightedGroupScore() {
 const componentScore = weightedGroupScore();
 const headlineScore = componentScore ?? headline?.score ?? null;
 const headlineStatus = statusFor(headlineScore);
-const headlineRawScores = headlineHistory.slice(-60).map((row) => row.score);
+const headlineWindow = headlineHistory.slice(-60);
+const headlineRawScores = headlineWindow.map((row) => row.score);
+const headlineDates = headlineWindow.map((row) => row.score_date);
 const scoreMismatch = headline?.score != null && componentScore != null && Math.abs(headline.score - componentScore) > 1;
 if (scoreMismatch && headlineRawScores.length > 0 && headlineScore != null) {
   headlineRawScores[headlineRawScores.length - 1] = headlineScore;
@@ -267,6 +305,13 @@ const headlineScores = rollingAverage(headlineRawScores, 3);
 const headlineSpark = buildSpark(headlineScores, 460, 130, 6, 0, 100, 30, 6);
 const headlineScoreText = headlineScore == null ? '-' : String(Math.round(headlineScore));
 const updatedLabel = formatFullDate(headline?.score_date ?? null);
+const headlineRangeLabel = formatRangeLabel(headlineDates);
+const headlineWindowLabel = headlineDates.length > 1
+  ? `Last ${headlineDates.length} months`
+  : 'History pending';
+const headlineMidLabel = headlineDates.length > 2
+  ? formatAxisDate(headlineDates[Math.floor((headlineDates.length - 1) / 2)])
+  : '';
 ---
 
 <BaseLayout
@@ -312,10 +357,10 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
         {headlineSpark ? (
           <div class="composite-history">
             <div class="history-head">
-              <span>Composite · 3-month trend</span>
-              <span>0-100 scale</span>
+              <span>Composite · {headlineWindowLabel} · 3-month avg</span>
+              <span>{headlineRangeLabel} · 0-100 scale</span>
             </div>
-            <svg viewBox="0 0 460 130" role="img" aria-label="Composite score history">
+            <svg viewBox="0 0 460 150" role="img" aria-label={`Composite score history from ${headlineRangeLabel}`}>
               <defs>
                 <linearGradient id="headline-gradient" x1="0" x2="0" y1="0" y2="1">
                   <stop offset="0%" stop-color={headlineStatus.color} stop-opacity="0.22" />
@@ -334,6 +379,10 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
               <path d={headlineSpark.area} fill="url(#headline-gradient)" />
               <path d={headlineSpark.d} fill="none" stroke={headlineStatus.color} stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
               <circle cx={headlineSpark.last[0]} cy={headlineSpark.last[1]} r="4" fill="#ffffff" stroke={headlineStatus.color} stroke-width="2" />
+              <line x1="30" x2="430" y1="132" y2="132" stroke="#e6e3da" />
+              <text x="30" y="146" text-anchor="start">{formatAxisDate(headlineDates[0] ?? null)}</text>
+              {headlineMidLabel && <text x="230" y="146" text-anchor="middle">{headlineMidLabel}</text>}
+              <text x="430" y="146" text-anchor="end">{formatAxisDate(headlineDates[headlineDates.length - 1] ?? null)}</text>
             </svg>
           </div>
         ) : (
@@ -415,6 +464,10 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
                         <path d={card.spark.d} fill="none" stroke={card.status.color} stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
                         <circle cx={card.spark.last[0]} cy={card.spark.last[1]} r="3" fill="#ffffff" stroke={card.status.color} stroke-width="1.6" />
                       </svg>
+                      <div class="spark-axis">
+                        <span>{formatAxisDate(card.sparklineDates[0] ?? null)}</span>
+                        <span>{formatAxisDate(card.sparklineDates[card.sparklineDates.length - 1] ?? null)}</span>
+                      </div>
                     </div>
                   ) : (
                     <div class="card-spark card-spark-empty">History pending</div>
@@ -624,7 +677,14 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
   .drawer-chart-head {
     display: flex;
     justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
     margin-bottom: 12px;
+  }
+
+  .history-head span:last-child,
+  .drawer-chart-head span:last-child {
+    text-align: right;
   }
 
   .composite-history svg {
@@ -845,13 +905,23 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
   }
 
   .card-spark {
-    min-height: 66px;
+    min-height: 74px;
   }
 
   .card-spark svg {
     width: 100%;
     height: auto;
     display: block;
+  }
+
+  .spark-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    color: var(--muted);
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 9px;
+    text-transform: uppercase;
   }
 
   .card-spark-empty {
@@ -1139,6 +1209,16 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
     return Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
   }
 
+  function fmtAxisDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(`${dateStr}T00:00:00Z`);
+    return d.toLocaleDateString('en-US', {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  }
+
   function setText(selector, value) {
     const el = drawer?.querySelector(selector);
     if (el) el.textContent = value ?? '';
@@ -1148,6 +1228,7 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
     const wrap = drawer?.querySelector('[data-drawer-chart]');
     const range = drawer?.querySelector('[data-drawer-range]');
     const data = card.sparkline?.length > 1 ? card.sparkline : card.scoreSparkline;
+    const dates = card.sparkline?.length > 1 ? card.sparklineDates : card.scoreSparklineDates;
     const path = makePath(data || []);
     if (!wrap || !range) return;
     if (!path) {
@@ -1156,7 +1237,9 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
       return;
     }
     const color = card.status.color;
-    range.textContent = `min ${fmtNumber(path.min)} · max ${fmtNumber(path.max)}`;
+    const startLabel = fmtAxisDate(dates?.[0]);
+    const endLabel = fmtAxisDate(dates?.[dates.length - 1]);
+    range.textContent = `${card.historyWindow} · ${card.historyRange} · min ${fmtNumber(path.min)} · max ${fmtNumber(path.max)}`;
     const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => path.lo + (path.hi - path.lo) * f);
     const grid = yTicks.map((value) => {
       const y = 28 + (1 - (value - path.lo) / (path.hi - path.lo)) * (220 - 56);
@@ -1164,7 +1247,7 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
     }).join('');
     const last = path.points[path.points.length - 1];
     wrap.innerHTML = `
-      <svg viewBox="0 0 600 220" role="img" aria-label="${card.label} trailing history">
+      <svg viewBox="0 0 600 220" role="img" aria-label="${card.label} trailing history from ${card.historyRange}">
         <defs>
           <linearGradient id="drawer-gradient" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stop-color="${color}" stop-opacity="0.22" />
@@ -1176,6 +1259,9 @@ const updatedLabel = formatFullDate(headline?.score_date ?? null);
         <path d="${path.d}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
         <line x1="${last[0]}" x2="582" y1="${last[1]}" y2="${last[1]}" stroke="${color}" stroke-dasharray="2 3" />
         <circle cx="${last[0]}" cy="${last[1]}" r="4" fill="#fff" stroke="${color}" stroke-width="2" />
+        <line x1="28" x2="572" y1="198" y2="198" stroke="#e6e3da" />
+        <text x="28" y="214" text-anchor="start">${startLabel}</text>
+        <text x="572" y="214" text-anchor="end">${endLabel}</text>
       </svg>
     `;
   }
