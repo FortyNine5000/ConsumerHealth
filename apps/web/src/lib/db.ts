@@ -38,6 +38,7 @@ export interface IndicatorRow {
   scoring_type: string;
   higher_is_better: number | null;
   weight_in_subscore: number;
+  lcl_class: string | null;
   is_scored: number;
   latest_score: number | null;
   latest_value: number | null;
@@ -167,7 +168,7 @@ export async function getAllIndicators(): Promise<IndicatorRow[]> {
   try {
     const result = await client.execute(
       `SELECT i.id, i.slug, i.name, i.subscore, i.series_id, i.frequency,
-              i.scoring_type, i.higher_is_better, i.weight_in_subscore, i.is_scored,
+              i.scoring_type, i.higher_is_better, i.weight_in_subscore, i.lcl_class, i.is_scored,
               s.name AS source_name, s.base_url AS source_url,
               i.description_md, i.units,
               (SELECT sc.smoothed_score FROM indicator_scores sc WHERE sc.indicator_id = i.id ORDER BY sc.score_date DESC LIMIT 1) AS latest_score,
@@ -189,14 +190,15 @@ export async function getAllIndicators(): Promise<IndicatorRow[]> {
         scoring_type: r[6] as string,
         higher_is_better: r[7] as number | null,
         weight_in_subscore: r[8] as number,
-        is_scored: r[9] as number,
-        source_name: r[10] as string | null,
-        source_url: r[11] as string | null,
-        description: r[12] as string | null,
-        unit: r[13] as string | null,
-        latest_score: r[14] as number | null,
-        latest_value: r[15] as number | null,
-        latest_date: r[16] as string | null,
+        lcl_class: r[9] as string | null,
+        is_scored: r[10] as number,
+        source_name: r[11] as string | null,
+        source_url: r[12] as string | null,
+        description: r[13] as string | null,
+        unit: r[14] as string | null,
+        latest_score: r[15] as number | null,
+        latest_value: r[16] as number | null,
+        latest_date: r[17] as string | null,
         sparkline: [] as number[],
         sparkline_dates: [] as string[],
         score_sparkline: [] as number[],
@@ -239,7 +241,7 @@ export async function getIndicatorBySlug(slug: string): Promise<IndicatorRow | n
   try {
     const result = await client.execute({
       sql: `SELECT i.slug, i.name, i.subscore, i.series_id, i.frequency,
-                   i.scoring_type, i.higher_is_better, i.weight_in_subscore, i.is_scored,
+                   i.scoring_type, i.higher_is_better, i.weight_in_subscore, i.lcl_class, i.is_scored,
                    s.name AS source_name, s.base_url AS source_url,
                    i.description_md, i.units,
                    NULL AS latest_score, NULL AS latest_value, NULL AS latest_date
@@ -259,11 +261,12 @@ export async function getIndicatorBySlug(slug: string): Promise<IndicatorRow | n
       scoring_type: r[5] as string,
       higher_is_better: r[6] as number | null,
       weight_in_subscore: r[7] as number,
-      is_scored: r[8] as number,
-      source_name: r[9] as string | null,
-      source_url: r[10] as string | null,
-      description: r[11] as string | null,
-      unit: r[12] as string | null,
+      lcl_class: r[8] as string | null,
+      is_scored: r[9] as number,
+      source_name: r[10] as string | null,
+      source_url: r[11] as string | null,
+      description: r[12] as string | null,
+      unit: r[13] as string | null,
       latest_score: null,
       latest_value: null,
       latest_date: null,
