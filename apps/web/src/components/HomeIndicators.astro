@@ -355,24 +355,20 @@ const hardScore = weightedScoreFor(hardSignalSlugs);
 const softScore = weightedScoreFor(softSignalSlugs);
 const divergence = hardScore != null && softScore != null ? hardScore - softScore : null;
 const divergenceAbs = divergence == null ? null : Math.abs(divergence);
-const divergencePosition = divergence == null ? 50 : Math.max(8, Math.min(92, 50 + divergence / 2));
-const divergenceTone = divergenceAbs == null
-  ? 'Pending'
-  : divergenceAbs >= 35
-    ? 'Extreme'
-    : divergenceAbs >= 20
-      ? 'Wide'
-      : divergenceAbs >= 10
-        ? 'Moderate'
-        : 'Aligned';
-const divergenceLabel = divergence == null
+const hardStatus = statusFor(hardScore);
+const softStatus = statusFor(softScore);
+const hardMarker = hardScore == null ? 50 : Math.max(2, Math.min(98, hardScore));
+const softMarker = softScore == null ? 50 : Math.max(2, Math.min(98, softScore));
+const hardScoreText = hardScore == null ? '-' : String(Math.round(hardScore));
+const softScoreText = softScore == null ? '-' : String(Math.round(softScore));
+const divergenceGapText = divergenceAbs == null ? '-' : `${Math.round(divergenceAbs)} pts`;
+const divergenceSummary = divergence == null
   ? 'Pending'
   : divergenceAbs < 10
-    ? 'Hard and soft data aligned'
+    ? 'Hard and soft data are broadly aligned'
     : divergence > 0
-      ? 'Hard data stronger than sentiment'
-      : 'Sentiment stronger than hard data';
-const divergenceText = divergence == null ? '-' : formatDelta(divergence, null);
+      ? 'Hard data is stronger'
+      : 'Soft data is stronger';
 
 const componentScore = weightedGroupScore();
 const headlineScore = componentScore ?? headline?.score ?? null;
@@ -479,36 +475,46 @@ const headlineMidLabel = headlineDates.length > 2
 
     <section class="divergence-panel" aria-label="Hard data versus soft data divergence">
       <div class="divergence-copy">
-        <div class="eyebrow">Hard vs. Soft Divergence</div>
-        <h2>{divergenceLabel}</h2>
+        <div class="eyebrow">Hard vs. Soft Scores</div>
+        <h2>{divergenceSummary}</h2>
         <p>
-          Hard data blends labor, spending, balance-sheet, and credit sub-scores. Soft data tracks
-          sentiment and expectations. The spread is {divergenceText} points.
+          These are separate reads, not another composite. Hard data blends labor, spending,
+          balance-sheet, and credit. Soft data tracks sentiment and expectations.
         </p>
       </div>
-      <div class="divergence-meter">
-        <div class="divergence-stats">
-          <div>
+      <div class="score-compare">
+        <div class="score-compare-cards">
+          <article class="signal-card" style={`--signal: ${hardStatus.color}`}>
             <span>Hard Data</span>
-            <strong>{hardScore == null ? '-' : Math.round(hardScore)}</strong>
+            <strong>{hardScoreText}</strong>
+            <em>{hardStatus.label}</em>
+            <p>Labor, spending, balance sheet, and credit stress.</p>
+          </article>
+          <div class="signal-gap">
+            <span>Gap</span>
+            <strong>{divergenceGapText}</strong>
+            <em>0-100 scale</em>
           </div>
-          <div>
-            <span>{divergenceTone}</span>
-            <strong>{divergenceText}</strong>
-          </div>
-          <div>
+          <article class="signal-card" style={`--signal: ${softStatus.color}`}>
             <span>Soft Data</span>
-            <strong>{softScore == null ? '-' : Math.round(softScore)}</strong>
+            <strong>{softScoreText}</strong>
+            <em>{softStatus.label}</em>
+            <p>Sentiment and expectations.</p>
+          </article>
+        </div>
+        <div
+          class="score-rail"
+          style={`--hard-marker: ${hardMarker}%; --soft-marker: ${softMarker}%; --hard-color: ${hardStatus.color}; --soft-color: ${softStatus.color}`}
+        >
+          <div class="rail-track">
+            <span class="rail-marker hard"><i>Hard</i></span>
+            <span class="rail-marker soft"><i>Soft</i></span>
           </div>
-        </div>
-        <div class="divergence-track" style={`--marker: ${divergencePosition}%`}>
-          <i></i>
-          <span></span>
-        </div>
-        <div class="divergence-axis">
-          <span>Soft stronger</span>
-          <span>Aligned</span>
-          <span>Hard stronger</span>
+          <div class="rail-axis">
+            <span>0</span>
+            <span>50</span>
+            <span>100</span>
+          </div>
         </div>
       </div>
     </section>
@@ -555,8 +561,10 @@ const headlineMidLabel = headlineDates.length > 2
                 >
                   <div class="card-top">
                     <div>
-                      <span class="series-code">{card.code}</span>
-                      <span class={`lcl-chip ${card.lclClass}`}>{card.lclLabel}</span>
+                      <div class="card-meta-row">
+                        <span class="series-code">{card.code}</span>
+                        <span class={`lcl-chip ${card.lclClass}`}>{card.lclLabel}</span>
+                      </div>
                       <h3>{card.label}</h3>
                     </div>
                     <div class="card-score">
@@ -565,14 +573,20 @@ const headlineMidLabel = headlineDates.length > 2
                     </div>
                   </div>
 
-                  <div class="card-value-row">
-                    <strong>{card.valueText}</strong>
-                    {card.unit && <span>{card.unit}</span>}
-                    <em class={card.deltaGood === false ? 'delta-bad' : card.deltaGood === true ? 'delta-good' : ''}>
-                      {card.deltaText}
-                      <small>{card.deltaLabel}</small>
-                    </em>
-                  </div>
+                  {card.value == null ? (
+                    <div class="card-value-row is-pending">
+                      <strong>Data pending</strong>
+                    </div>
+                  ) : (
+                    <div class="card-value-row">
+                      <strong>{card.valueText}</strong>
+                      {card.unit && <span>{card.unit}</span>}
+                      <em class={card.deltaGood === false ? 'delta-bad' : card.deltaGood === true ? 'delta-good' : ''}>
+                        {card.deltaText}
+                        <small>{card.deltaLabel}</small>
+                      </em>
+                    </div>
+                  )}
 
                   {card.spark ? (
                     <div class="card-spark">
@@ -863,53 +877,98 @@ const headlineMidLabel = headlineDates.length > 2
     line-height: 1.55;
   }
 
-  .divergence-meter {
+  .score-compare {
     background: var(--card);
     border: 1px solid var(--hairline);
     padding: 20px;
   }
 
-  .divergence-stats {
+  .score-compare-cards {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     gap: 16px;
-    align-items: start;
+    align-items: stretch;
   }
 
-  .divergence-stats div:nth-child(2) {
-    text-align: center;
+  .signal-card {
+    border-top: 3px solid var(--signal);
+    padding-top: 14px;
   }
 
-  .divergence-stats div:last-child {
+  .signal-card:last-child {
     text-align: right;
   }
 
-  .divergence-stats span,
-  .divergence-axis {
+  .signal-card span,
+  .signal-gap span,
+  .signal-gap em,
+  .signal-card em,
+  .rail-axis {
     color: var(--muted);
     font-family: "JetBrains Mono", Consolas, monospace;
     font-size: 10px;
+    font-style: normal;
     text-transform: uppercase;
   }
 
-  .divergence-stats strong {
+  .signal-card strong,
+  .signal-gap strong {
     display: block;
-    margin-top: 6px;
     color: var(--ink);
-    font-size: 34px;
-    line-height: 1;
+    font-size: 54px;
+    line-height: 0.95;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
   }
 
-  .divergence-track {
-    position: relative;
-    height: 10px;
-    margin-top: 22px;
-    background: linear-gradient(90deg, #7a6a44 0%, #e6e3da 50%, #1f3df5 100%);
+  .signal-card strong {
+    margin-top: 10px;
   }
 
-  .divergence-track i {
+  .signal-card em {
+    display: block;
+    margin-top: 8px;
+    color: var(--signal);
+    font-weight: 600;
+  }
+
+  .signal-card p {
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .signal-gap {
+    min-width: 112px;
+    border-left: 1px solid var(--hairline);
+    border-right: 1px solid var(--hairline);
+    padding: 14px 18px 0;
+    text-align: center;
+  }
+
+  .signal-gap strong {
+    margin-top: 12px;
+    font-size: 30px;
+  }
+
+  .signal-gap em {
+    display: block;
+    margin-top: 8px;
+  }
+
+  .score-rail {
+    margin-top: 26px;
+  }
+
+  .rail-track {
+    position: relative;
+    height: 10px;
+    background: linear-gradient(90deg, #8a2a2a 0%, #e6e3da 50%, #345544 100%);
+  }
+
+  .rail-track::before {
+    content: "";
     position: absolute;
     left: 50%;
     top: -5px;
@@ -918,30 +977,57 @@ const headlineMidLabel = headlineDates.length > 2
     background: rgba(14, 17, 22, 0.38);
   }
 
-  .divergence-track span {
+  .rail-marker {
     position: absolute;
-    left: var(--marker);
     top: 50%;
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     border: 2px solid var(--card);
     border-radius: 999px;
-    background: var(--ink);
+    background: var(--signal-color);
     box-shadow: 0 0 0 1px rgba(14, 17, 22, 0.22);
     transform: translate(-50%, -50%);
   }
 
-  .divergence-axis {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    margin-top: 9px;
+  .rail-marker.hard {
+    --signal-color: var(--hard-color);
+    left: var(--hard-marker);
   }
 
-  .divergence-axis span:nth-child(2) {
+  .rail-marker.soft {
+    --signal-color: var(--soft-color);
+    left: var(--soft-marker);
+  }
+
+  .rail-marker i {
+    position: absolute;
+    left: 50%;
+    bottom: 18px;
+    color: var(--signal-color);
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 600;
+    text-transform: uppercase;
+    transform: translateX(-50%);
+  }
+
+  .rail-marker.soft i {
+    bottom: auto;
+    top: 18px;
+  }
+
+  .rail-axis {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-top: 28px;
+  }
+
+  .rail-axis span:nth-child(2) {
     text-align: center;
   }
 
-  .divergence-axis span:last-child {
+  .rail-axis span:last-child {
     text-align: right;
   }
 
@@ -1078,11 +1164,15 @@ const headlineMidLabel = headlineDates.length > 2
     transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
   }
 
-  .indicator-card:hover,
+  .indicator-card:hover {
+    border-color: #b9b2a5;
+    box-shadow: 0 8px 28px rgba(14, 17, 22, 0.08);
+  }
+
   .indicator-card:focus-visible {
     border-color: var(--ink);
-    box-shadow: 0 8px 28px rgba(14, 17, 22, 0.08);
     outline: none;
+    box-shadow: 0 0 0 2px rgba(14, 17, 22, 0.18);
   }
 
   .card-top {
@@ -1100,10 +1190,30 @@ const headlineMidLabel = headlineDates.length > 2
     font-weight: 600;
   }
 
+  .card-top > div:first-child {
+    min-width: 0;
+  }
+
+  .card-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .series-code {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .lcl-chip {
     display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
-    margin-left: 6px;
     border: 1px solid var(--hairline);
     padding: 2px 6px;
     color: var(--ink-2);
@@ -1163,6 +1273,13 @@ const headlineMidLabel = headlineDates.length > 2
     font-style: normal;
     font-size: 12px;
     font-variant-numeric: tabular-nums;
+  }
+
+  .card-value-row.is-pending strong {
+    color: var(--muted);
+    font-size: 18px;
+    text-transform: uppercase;
+    font-family: "JetBrains Mono", Consolas, monospace;
   }
 
   .card-spark {
@@ -1446,7 +1563,23 @@ const headlineMidLabel = headlineDates.length > 2
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .divergence-stats strong {
+    .score-compare-cards {
+      grid-template-columns: 1fr;
+    }
+
+    .signal-card:last-child {
+      text-align: left;
+    }
+
+    .signal-gap {
+      border-left: 0;
+      border-right: 0;
+      border-top: 1px solid var(--hairline);
+      border-bottom: 1px solid var(--hairline);
+      padding: 16px 0;
+    }
+
+    .signal-card strong {
       font-size: 28px;
     }
 
