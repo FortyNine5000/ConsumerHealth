@@ -361,7 +361,6 @@ const hardMarker = hardScore == null ? 50 : Math.max(2, Math.min(98, hardScore))
 const softMarker = softScore == null ? 50 : Math.max(2, Math.min(98, softScore));
 const hardScoreText = hardScore == null ? '-' : String(Math.round(hardScore));
 const softScoreText = softScore == null ? '-' : String(Math.round(softScore));
-const divergenceGapText = divergenceAbs == null ? '-' : `${Math.round(divergenceAbs)} pts`;
 const divergenceSummary = divergence == null
   ? 'Pending'
   : divergenceAbs < 10
@@ -477,10 +476,6 @@ const headlineMidLabel = headlineDates.length > 2
       <div class="divergence-copy">
         <div class="eyebrow">Hard vs. Soft Scores</div>
         <h2>{divergenceSummary}</h2>
-        <p>
-          These are separate reads, not another composite. Hard data blends labor, spending,
-          balance-sheet, and credit. Soft data tracks sentiment and expectations.
-        </p>
       </div>
       <div class="score-compare">
         <div class="score-compare-cards">
@@ -490,11 +485,6 @@ const headlineMidLabel = headlineDates.length > 2
             <em>{hardStatus.label}</em>
             <p>Labor, spending, balance sheet, and credit stress.</p>
           </article>
-          <div class="signal-gap">
-            <span>Gap</span>
-            <strong>{divergenceGapText}</strong>
-            <em>0-100 scale</em>
-          </div>
           <article class="signal-card" style={`--signal: ${softStatus.color}`}>
             <span>Soft Data</span>
             <strong>{softScoreText}</strong>
@@ -507,8 +497,8 @@ const headlineMidLabel = headlineDates.length > 2
           style={`--hard-marker: ${hardMarker}%; --soft-marker: ${softMarker}%; --hard-color: ${hardStatus.color}; --soft-color: ${softStatus.color}`}
         >
           <div class="rail-track">
-            <span class="rail-marker hard"><i>Hard</i></span>
-            <span class="rail-marker soft"><i>Soft</i></span>
+            <span class="rail-marker hard"></span>
+            <span class="rail-marker soft"></span>
           </div>
           <div class="rail-axis">
             <span>0</span>
@@ -869,14 +859,6 @@ const headlineMidLabel = headlineDates.length > 2
     font-weight: 500;
   }
 
-  .divergence-copy p {
-    max-width: 600px;
-    margin: 12px 0 0;
-    color: var(--muted);
-    font-size: 14px;
-    line-height: 1.55;
-  }
-
   .score-compare {
     background: var(--card);
     border: 1px solid var(--hairline);
@@ -885,7 +867,7 @@ const headlineMidLabel = headlineDates.length > 2
 
   .score-compare-cards {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
     align-items: stretch;
   }
@@ -900,8 +882,6 @@ const headlineMidLabel = headlineDates.length > 2
   }
 
   .signal-card span,
-  .signal-gap span,
-  .signal-gap em,
   .signal-card em,
   .rail-axis {
     color: var(--muted);
@@ -911,8 +891,7 @@ const headlineMidLabel = headlineDates.length > 2
     text-transform: uppercase;
   }
 
-  .signal-card strong,
-  .signal-gap strong {
+  .signal-card strong {
     display: block;
     color: var(--ink);
     font-size: 54px;
@@ -937,24 +916,6 @@ const headlineMidLabel = headlineDates.length > 2
     color: var(--muted);
     font-size: 13px;
     line-height: 1.45;
-  }
-
-  .signal-gap {
-    min-width: 112px;
-    border-left: 1px solid var(--hairline);
-    border-right: 1px solid var(--hairline);
-    padding: 14px 18px 0;
-    text-align: center;
-  }
-
-  .signal-gap strong {
-    margin-top: 12px;
-    font-size: 30px;
-  }
-
-  .signal-gap em {
-    display: block;
-    margin-top: 8px;
   }
 
   .score-rail {
@@ -997,24 +958,6 @@ const headlineMidLabel = headlineDates.length > 2
   .rail-marker.soft {
     --signal-color: var(--soft-color);
     left: var(--soft-marker);
-  }
-
-  .rail-marker i {
-    position: absolute;
-    left: 50%;
-    bottom: 18px;
-    color: var(--signal-color);
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-size: 9px;
-    font-style: normal;
-    font-weight: 600;
-    text-transform: uppercase;
-    transform: translateX(-50%);
-  }
-
-  .rail-marker.soft i {
-    bottom: auto;
-    top: 18px;
   }
 
   .rail-axis {
@@ -1569,14 +1512,6 @@ const headlineMidLabel = headlineDates.length > 2
 
     .signal-card:last-child {
       text-align: left;
-    }
-
-    .signal-gap {
-      border-left: 0;
-      border-right: 0;
-      border-top: 1px solid var(--hairline);
-      border-bottom: 1px solid var(--hairline);
-      padding: 16px 0;
     }
 
     .signal-card strong {
