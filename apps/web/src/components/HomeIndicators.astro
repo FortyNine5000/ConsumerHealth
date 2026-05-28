@@ -5,6 +5,7 @@ import {
   getHeadlineHistory,
   getLatestHeadlineScore,
   getLatestSubScores,
+  getSubScoreHistory,
 } from '../lib/db';
 import {
   scoreToBand,
@@ -54,19 +55,33 @@ const subscoreFullLabels: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  'Very Strong': '#1f3df5',
-  Healthy: '#345544',
-  Mixed: '#7a6a44',
-  Weakening: '#a04a2a',
-  Stressed: '#8a2a2a',
-  Crisis: '#5c0c12',
+  'Very Strong': '#1a7c3e',
+  Healthy: '#3f8f4b',
+  Mixed: '#b08a24',
+  Weakening: '#c05f2a',
+  Stressed: '#b83a32',
+  Crisis: '#8b0000',
   Tracked: '#7a8290',
 };
+
+const subscoreHistoryBySlug: Record<string, Array<{ score_date: string; score: number }>> = {};
+await Promise.all(subscoreOrder.map(async (slug) => {
+  try {
+    subscoreHistoryBySlug[slug] = await getSubScoreHistory(slug);
+  } catch (e) {
+    subscoreHistoryBySlug[slug] = [];
+  }
+}));
 
 function statusFor(score: number | null) {
   if (score == null) return { label: 'Tracked', color: statusColors.Tracked };
   const band = scoreToBand(score);
   return { label: band.label, color: statusColors[band.label] ?? band.color };
+}
+
+function conditionPhrase(label: string) {
+  if (label === 'Crisis') return 'in crisis';
+  return label.toLowerCase();
 }
 
 function average(values: Array<number | null>) {
@@ -125,6 +140,16 @@ function rollingAverage(values: number[], windowSize: number) {
     const window = values
       .slice(Math.max(0, index - windowSize + 1), index + 1)
       .filter((value) => Number.isFinite(value));
+    return window.reduce((sum, value) => sum + value, 0) / window.length;
+  });
+}
+
+function rollingAverageNullable(values: Array<number | null>, windowSize: number) {
+  return values.map((_, index) => {
+    const window = values
+      .slice(Math.max(0, index - windowSize + 1), index + 1)
+      .filter((value): value is number => value != null && Number.isFinite(value));
+    if (window.length === 0) return null;
     return window.reduce((sum, value) => sum + value, 0) / window.length;
   });
 }
@@ -244,6 +269,63 @@ function buildSpark(
   return { d, area, last, min, max };
 }
 
+function buildLinePath(
+  values: Array<number | null>,
+  width = 460,
+  height = 130,
+  fixedMin = 0,
+  fixedMax = 100,
+  xPad = 30,
+  yPad = 6,
+) {
+  const finiteCount = values.filter((value): value is number => value != null && Number.isFinite(value)).length;
+  if (finiteCount < 2) return null;
+  const range = fixedMax - fixedMin || 1;
+  let d = '';
+  let last: [number, number] | null = null;
+  let inSegment = false;
+
+  values.forEach((value, index) => {
+    if (value == null || !Number.isFinite(value)) {
+      inSegment = false;
+      return;
+    }
+    const x = xPad + (index / (values.length - 1)) * (width - xPad * 2);
+    const y = yPad + (1 - (value - fixedMin) / range) * (height - yPad * 2);
+    d += `${inSegment ? ' L' : 'M'}${x.toFixed(2)} ${y.toFixed(2)}`;
+    last = [x, y];
+    inSegment = true;
+  });
+
+  return { d, last };
+}
+
+function chartScaleFor(series: Array<Array<number | null>>) {
+  const values = series
+    .flat()
+    .filter((value): value is number => value != null && Number.isFinite(value));
+  if (values.length === 0) return { min: 0, max: 100, ticks: [0, 50, 100] };
+
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const rawSpan = Math.max(maxValue - minValue, 18);
+  let min = Math.max(0, Math.floor((minValue - rawSpan * 0.18) / 5) * 5);
+  let max = Math.min(100, Math.ceil((maxValue + rawSpan * 0.18) / 5) * 5);
+
+  if (max - min < 20) {
+    const midpoint = (max + min) / 2;
+    min = Math.max(0, Math.floor((midpoint - 10) / 5) * 5);
+    max = Math.min(100, Math.ceil((midpoint + 10) / 5) * 5);
+  }
+
+  const mid = Math.round(((min + max) / 2) / 5) * 5;
+  return { min, max, ticks: [max, mid, min] };
+}
+
+function formatChartTick(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 const latestSubscoreBySlug = new Map(latestSubscores.map((s) => [s.slug, s]));
 const referenceDate = latestDateString([
   headline?.score_date,
@@ -349,6 +431,25 @@ function weightedScoreFor(slugs: string[]) {
   return selected.reduce((sum, group) => sum + (group.score ?? 0) * group.weight, 0) / totalWeight;
 }
 
+function weightedHistoryFor(slugs: string[], dates: string[]) {
+  const histories = slugs.map((slug) => ({
+    slug,
+    weight: subscoreWeights[slug] ?? 0,
+    byDate: new Map((subscoreHistoryBySlug[slug] ?? []).map((row) => [row.score_date, row.score])),
+  }));
+
+  return dates.map((date) => {
+    const available = histories
+      .map((history) => ({ value: history.byDate.get(date), weight: history.weight }))
+      .filter((point): point is { value: number; weight: number } => (
+        point.value != null && Number.isFinite(point.value) && point.weight > 0
+      ));
+    const totalWeight = available.reduce((sum, point) => sum + point.weight, 0);
+    if (totalWeight <= 0) return null;
+    return available.reduce((sum, point) => sum + point.value * point.weight, 0) / totalWeight;
+  });
+}
+
 const hardSignalSlugs = ['labor_income', 'household_balance_sheet', 'credit_stress', 'spending_demand'];
 const softSignalSlugs = ['sentiment_expectations'];
 const hardScore = weightedScoreFor(hardSignalSlugs);
@@ -357,17 +458,6 @@ const divergence = hardScore != null && softScore != null ? hardScore - softScor
 const divergenceAbs = divergence == null ? null : Math.abs(divergence);
 const hardStatus = statusFor(hardScore);
 const softStatus = statusFor(softScore);
-const hardMarker = hardScore == null ? 50 : Math.max(2, Math.min(98, hardScore));
-const softMarker = softScore == null ? 50 : Math.max(2, Math.min(98, softScore));
-const hardScoreText = hardScore == null ? '-' : String(Math.round(hardScore));
-const softScoreText = softScore == null ? '-' : String(Math.round(softScore));
-const divergenceSummary = divergence == null
-  ? 'Pending'
-  : divergenceAbs < 10
-    ? 'Hard and soft data are broadly aligned'
-    : divergence > 0
-      ? 'Hard data is stronger'
-      : 'Soft data is stronger';
 
 const componentScore = weightedGroupScore();
 const headlineScore = componentScore ?? headline?.score ?? null;
@@ -385,7 +475,14 @@ if (scoreMismatch && headlineRawScores.length > 0 && headlineScore != null) {
   headlineRawScores[headlineRawScores.length - 1] = headlineScore;
 }
 const headlineScores = rollingAverage(headlineRawScores, 3);
-const headlineSpark = buildSpark(headlineScores, 460, 130, 6, 0, 100, 30, 6);
+const hardHistoryRaw = weightedHistoryFor(hardSignalSlugs, headlineDates);
+const softHistoryRaw = weightedHistoryFor(softSignalSlugs, headlineDates);
+const hardHistoryScores = rollingAverageNullable(hardHistoryRaw, 3);
+const softHistoryScores = rollingAverageNullable(softHistoryRaw, 3);
+const chartScale = chartScaleFor([headlineScores, hardHistoryScores, softHistoryScores]);
+const headlineSpark = buildSpark(headlineScores, 460, 130, 6, chartScale.min, chartScale.max, 30, 6);
+const hardHistorySpark = buildLinePath(hardHistoryScores, 460, 130, chartScale.min, chartScale.max, 30, 6);
+const softHistorySpark = buildLinePath(softHistoryScores, 460, 130, chartScale.min, chartScale.max, 30, 6);
 const headlineScoreText = headlineScore == null ? '-' : String(Math.round(headlineScore));
 const updatedLabel = formatFullDate(headline?.score_date ?? null);
 const headlineRangeLabel = formatRangeLabel(headlineDates);
@@ -393,6 +490,21 @@ const headlineWindowLabel = headlineTimeline.label;
 const headlineMidLabel = headlineDates.length > 2
   ? formatAxisDate(headlineDates[Math.floor((headlineDates.length - 1) / 2)])
   : '';
+const yearChangeText = headline?.delta_12m == null
+  ? 'year-over-year momentum is not available yet'
+  : headline.delta_12m < 0
+    ? `down ${Math.abs(headline.delta_12m).toFixed(1)} points from a year ago`
+    : `up ${headline.delta_12m.toFixed(1)} points from a year ago`;
+const hardSoftSummary = hardScore == null || softScore == null
+  ? 'Hard and soft data will separate once enough sub-score history is available.'
+  : divergenceAbs != null && divergenceAbs < 10
+    ? `Hard and soft data are roughly aligned at ${Math.round(hardScore)} and ${Math.round(softScore)}, so the dashboard is not showing a large activity/sentiment split.`
+    : divergence != null && divergence > 0
+      ? `Hard data is ${Math.round(hardScore)} versus soft data at ${Math.round(softScore)}, so activity is holding up better than confidence.`
+      : `Soft data is ${Math.round(softScore)} versus hard data at ${Math.round(hardScore)}, so confidence is running ahead of activity.`;
+const consumerSummary = headlineScore == null
+  ? 'The dashboard is waiting for enough data to summarize the consumer backdrop. Hard and soft data will appear once the history is available.'
+  : `The consumer looks ${conditionPhrase(headlineStatus.label)}, with the composite at ${headlineScoreText} as of ${updatedLabel} and ${yearChangeText}. ${hardSoftSummary}`;
 ---
 
 <BaseLayout
@@ -403,11 +515,7 @@ const headlineMidLabel = headlineDates.length > 2
     <section class="indicators-hero">
       <div class="hero-copy">
         <h1>How the U.S. consumer is holding up.</h1>
-        <p>
-          {scored.length} series across {groups.length} sub-scores, normalized to each indicator's
-          own expanding historical distribution and aggregated into a composite read on household
-          financial health.
-        </p>
+        <p>{consumerSummary}</p>
         <div class="hero-updated">Updated {updatedLabel}</div>
       </div>
 
@@ -424,11 +532,11 @@ const headlineMidLabel = headlineDates.length > 2
           {!scoreMismatch && (
             <div class="composite-deltas">
               <div>
-                <span>vs prior</span>
+                <span>MoM</span>
                 <strong class={headline?.delta_1m != null && headline.delta_1m < 0 ? 'delta-bad' : ''}>{formatDelta(headline?.delta_1m ?? null, null)}</strong>
               </div>
               <div>
-                <span>vs year</span>
+                <span>YoY</span>
                 <strong class={headline?.delta_12m != null && headline.delta_12m < 0 ? 'delta-bad' : ''}>{formatDelta(headline?.delta_12m ?? null, null)}</strong>
               </div>
             </div>
@@ -438,8 +546,13 @@ const headlineMidLabel = headlineDates.length > 2
         {headlineSpark ? (
           <div class="composite-history">
             <div class="history-head">
-              <span>Composite · {headlineWindowLabel} · 3-month avg</span>
-              <span>{headlineRangeLabel} · 0-100 scale</span>
+              <span>Composite with hard/soft overlays · {headlineWindowLabel} · 3-month rolling average</span>
+              <span>{headlineRangeLabel} · y-axis {formatChartTick(chartScale.min)}-{formatChartTick(chartScale.max)} on 0-100 scale</span>
+            </div>
+            <div class="chart-legend" aria-hidden="true">
+              <span style={`--legend: ${headlineStatus.color}`}><i></i>Composite</span>
+              <span class="dashed" style={`--legend: ${hardStatus.color}`}><i></i>Hard data</span>
+              <span class="dashed" style={`--legend: ${softStatus.color}`}><i></i>Soft data</span>
             </div>
             <svg viewBox="0 0 460 150" role="img" aria-label={`Composite score history from ${headlineRangeLabel}`}>
               <defs>
@@ -448,18 +561,30 @@ const headlineMidLabel = headlineDates.length > 2
                   <stop offset="100%" stop-color={headlineStatus.color} stop-opacity="0" />
                 </linearGradient>
               </defs>
-              {[25, 50, 75].map((tick) => {
-                const y = 6 + (1 - tick / 100) * 118;
+              {chartScale.ticks.map((tick) => {
+                const y = 6 + (1 - (tick - chartScale.min) / (chartScale.max - chartScale.min || 1)) * 118;
                 return (
                   <g>
                     <line x1="30" x2="430" y1={y} y2={y} stroke="#e6e3da" stroke-dasharray={tick === 50 ? '0' : '2 4'} />
-                    <text x="22" y={y + 3} text-anchor="end">{tick}</text>
+                    <text x="22" y={y + 3} text-anchor="end">{formatChartTick(tick)}</text>
                   </g>
                 );
               })}
               <path d={headlineSpark.area} fill="url(#headline-gradient)" />
+              {hardHistorySpark && (
+                <path d={hardHistorySpark.d} fill="none" stroke={hardStatus.color} stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 4" opacity="0.9" />
+              )}
+              {softHistorySpark && (
+                <path d={softHistorySpark.d} fill="none" stroke={softStatus.color} stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 4" opacity="0.9" />
+              )}
               <path d={headlineSpark.d} fill="none" stroke={headlineStatus.color} stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
               <circle cx={headlineSpark.last[0]} cy={headlineSpark.last[1]} r="4" fill="#ffffff" stroke={headlineStatus.color} stroke-width="2" />
+              {hardHistorySpark?.last && (
+                <circle cx={hardHistorySpark.last[0]} cy={hardHistorySpark.last[1]} r="3.3" fill="#ffffff" stroke={hardStatus.color} stroke-width="1.8" />
+              )}
+              {softHistorySpark?.last && (
+                <circle cx={softHistorySpark.last[0]} cy={softHistorySpark.last[1]} r="3.3" fill="#ffffff" stroke={softStatus.color} stroke-width="1.8" />
+              )}
               <line x1="30" x2="430" y1="132" y2="132" stroke="#e6e3da" />
               <text x="30" y="146" text-anchor="start">{formatAxisDate(headlineDates[0] ?? null)}</text>
               {headlineMidLabel && <text x="230" y="146" text-anchor="middle">{headlineMidLabel}</text>}
@@ -469,43 +594,6 @@ const headlineMidLabel = headlineDates.length > 2
         ) : (
           <div class="composite-empty">Composite history will appear after ingestion runs.</div>
         )}
-      </div>
-    </section>
-
-    <section class="divergence-panel" aria-label="Hard data versus soft data divergence">
-      <div class="divergence-copy">
-        <div class="eyebrow">Hard vs. Soft Scores</div>
-        <h2>{divergenceSummary}</h2>
-      </div>
-      <div class="score-compare">
-        <div class="score-compare-cards">
-          <article class="signal-card" style={`--signal: ${hardStatus.color}`}>
-            <span>Hard Data</span>
-            <strong>{hardScoreText}</strong>
-            <em>{hardStatus.label}</em>
-            <p>Labor, spending, balance sheet, and credit stress.</p>
-          </article>
-          <article class="signal-card" style={`--signal: ${softStatus.color}`}>
-            <span>Soft Data</span>
-            <strong>{softScoreText}</strong>
-            <em>{softStatus.label}</em>
-            <p>Sentiment and expectations.</p>
-          </article>
-        </div>
-        <div
-          class="score-rail"
-          style={`--hard-marker: ${hardMarker}%; --soft-marker: ${softMarker}%; --hard-color: ${hardStatus.color}; --soft-color: ${softStatus.color}`}
-        >
-          <div class="rail-track">
-            <span class="rail-marker hard"></span>
-            <span class="rail-marker soft"></span>
-          </div>
-          <div class="rail-axis">
-            <span>0</span>
-            <span>50</span>
-            <span>100</span>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -670,7 +758,7 @@ const headlineMidLabel = headlineDates.length > 2
     --ink-2: #2a2f38;
     --muted: #7a8290;
     --hairline: #e6e3da;
-    --accent: #1f3df5;
+    --accent: #1a7c3e;
     background: var(--bg);
     color: var(--ink);
     min-height: 100vh;
@@ -784,18 +872,18 @@ const headlineMidLabel = headlineDates.length > 2
 
   .composite-deltas strong {
     display: block;
-    color: #345544;
+    color: #1a7c3e;
     font-size: 24px;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
   }
 
   .delta-bad {
-    color: #a04a2a !important;
+    color: #b83a32 !important;
   }
 
   .delta-good {
-    color: #345544 !important;
+    color: #1a7c3e !important;
   }
 
   .composite-history {
@@ -816,6 +904,36 @@ const headlineMidLabel = headlineDates.length > 2
     text-align: right;
   }
 
+  .chart-legend {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: -2px 0 10px;
+    color: var(--muted);
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .chart-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .chart-legend i {
+    width: 18px;
+    height: 2px;
+    background: var(--legend);
+  }
+
+  .chart-legend .dashed i {
+    height: 0;
+    border-top: 2px dashed var(--legend);
+    background: transparent;
+  }
+
   .composite-history svg {
     width: 100%;
     height: auto;
@@ -834,144 +952,6 @@ const headlineMidLabel = headlineDates.length > 2
     border-top: 1px solid var(--hairline);
     padding-top: 20px;
     font-size: 14px;
-  }
-
-  .divergence-panel {
-    max-width: 1280px;
-    margin: 0 auto 28px;
-    padding: 0 56px;
-    display: grid;
-    grid-template-columns: minmax(0, 0.85fr) minmax(420px, 1fr);
-    gap: 36px;
-    align-items: end;
-  }
-
-  .divergence-copy {
-    border-top: 1px solid var(--hairline);
-    padding-top: 22px;
-  }
-
-  .divergence-copy h2 {
-    margin: 8px 0 0;
-    color: var(--ink);
-    font-size: 30px;
-    line-height: 1.1;
-    font-weight: 500;
-  }
-
-  .score-compare {
-    background: var(--card);
-    border: 1px solid var(--hairline);
-    padding: 20px;
-  }
-
-  .score-compare-cards {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    align-items: stretch;
-  }
-
-  .signal-card {
-    border-top: 3px solid var(--signal);
-    padding-top: 14px;
-  }
-
-  .signal-card:last-child {
-    text-align: right;
-  }
-
-  .signal-card span,
-  .signal-card em,
-  .rail-axis {
-    color: var(--muted);
-    font-family: "JetBrains Mono", Consolas, monospace;
-    font-size: 10px;
-    font-style: normal;
-    text-transform: uppercase;
-  }
-
-  .signal-card strong {
-    display: block;
-    color: var(--ink);
-    font-size: 54px;
-    line-height: 0.95;
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .signal-card strong {
-    margin-top: 10px;
-  }
-
-  .signal-card em {
-    display: block;
-    margin-top: 8px;
-    color: var(--signal);
-    font-weight: 600;
-  }
-
-  .signal-card p {
-    margin: 14px 0 0;
-    color: var(--muted);
-    font-size: 13px;
-    line-height: 1.45;
-  }
-
-  .score-rail {
-    margin-top: 26px;
-  }
-
-  .rail-track {
-    position: relative;
-    height: 10px;
-    background: linear-gradient(90deg, #8a2a2a 0%, #e6e3da 50%, #345544 100%);
-  }
-
-  .rail-track::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    top: -5px;
-    width: 1px;
-    height: 20px;
-    background: rgba(14, 17, 22, 0.38);
-  }
-
-  .rail-marker {
-    position: absolute;
-    top: 50%;
-    width: 16px;
-    height: 16px;
-    border: 2px solid var(--card);
-    border-radius: 999px;
-    background: var(--signal-color);
-    box-shadow: 0 0 0 1px rgba(14, 17, 22, 0.22);
-    transform: translate(-50%, -50%);
-  }
-
-  .rail-marker.hard {
-    --signal-color: var(--hard-color);
-    left: var(--hard-marker);
-  }
-
-  .rail-marker.soft {
-    --signal-color: var(--soft-color);
-    left: var(--soft-marker);
-  }
-
-  .rail-axis {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    margin-top: 28px;
-  }
-
-  .rail-axis span:nth-child(2) {
-    text-align: center;
-  }
-
-  .rail-axis span:last-child {
-    text-align: right;
   }
 
   .filter-strip {
@@ -1167,13 +1147,13 @@ const headlineMidLabel = headlineDates.length > 2
   }
 
   .lcl-chip.leading {
-    border-color: rgba(31, 61, 245, 0.28);
-    color: #1f3df5;
+    border-color: rgba(26, 124, 62, 0.28);
+    color: #1a7c3e;
   }
 
   .lcl-chip.lagging {
-    border-color: rgba(122, 106, 68, 0.34);
-    color: #7a6a44;
+    border-color: rgba(176, 138, 36, 0.34);
+    color: #b08a24;
   }
 
   .card-score {
@@ -1429,10 +1409,6 @@ const headlineMidLabel = headlineDates.length > 2
       align-items: start;
     }
 
-    .divergence-panel {
-      grid-template-columns: 1fr;
-    }
-
     .hero-copy h1 {
       font-size: 56px;
       max-width: 760px;
@@ -1445,7 +1421,6 @@ const headlineMidLabel = headlineDates.length > 2
 
   @media (max-width: 820px) {
     .indicators-hero,
-    .divergence-panel,
     .filter-strip,
     .indicator-groups,
     .empty-state {
@@ -1504,18 +1479,6 @@ const headlineMidLabel = headlineDates.length > 2
     .composite-deltas {
       margin-top: 24px;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .score-compare-cards {
-      grid-template-columns: 1fr;
-    }
-
-    .signal-card:last-child {
-      text-align: left;
-    }
-
-    .signal-card strong {
-      font-size: 28px;
     }
 
     .indicator-card {
