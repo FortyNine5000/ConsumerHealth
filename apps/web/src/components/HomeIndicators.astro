@@ -64,6 +64,13 @@ const statusColors: Record<string, string> = {
   Tracked: '#7a8290',
 };
 
+const macroContextRanges = [
+  { start: '2007-12-01', end: '2009-06-01', label: 'NBER recession', type: 'recession' },
+  { start: '2020-02-01', end: '2020-04-01', label: 'NBER recession', type: 'recession' },
+  { start: '2022-03-17', end: '2023-07-27', label: 'Fed hiking', type: 'hiking' },
+  { start: '2024-09-19', end: '2025-12-11', label: 'Fed easing', type: 'easing' },
+] as const;
+
 const subscoreHistoryBySlug: Record<string, Array<{ score_date: string; score: number }>> = {};
 await Promise.all(subscoreOrder.map(async (slug) => {
   try {
@@ -127,6 +134,12 @@ function formatDelta(value: number | null, unit: string | null) {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })}`;
+}
+
+function formatScoreDelta(value: number | null) {
+  if (value == null || !Number.isFinite(value)) return '-';
+  const sign = value > 0 ? '+' : value < 0 ? '-' : '+/-';
+  return `${sign}${Math.abs(value).toFixed(1)} pts`;
 }
 
 function normalizeDisplayValue(slug: string, value: number | null) {
@@ -196,6 +209,10 @@ function formatRangeLabel(dates: string[]) {
 function latestDateString(dates: Array<string | null | undefined>) {
   const valid = dates.filter((date): date is string => Boolean(date)).sort();
   return valid.at(-1) ?? null;
+}
+
+function dateTime(dateStr: string) {
+  return new Date(`${dateStr}T00:00:00Z`).getTime();
 }
 
 function yearForDate(dateStr: string | null) {
@@ -326,6 +343,52 @@ function formatChartTick(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+function xForDate(dateStr: string, dates: string[], width = 460, xPad = 30) {
+  if (dates.length < 2) return xPad;
+  const start = dateTime(dates[0]);
+  const end = dateTime(dates[dates.length - 1]);
+  const range = end - start || 1;
+  const pct = Math.max(0, Math.min(1, (dateTime(dateStr) - start) / range));
+  return xPad + pct * (width - xPad * 2);
+}
+
+function buildMacroBands(dates: string[]) {
+  if (dates.length < 2) return [];
+  const start = dates[0];
+  const end = dates[dates.length - 1];
+  const bands: Array<(typeof macroContextRanges)[number] & { x: number; width: number }> = [];
+  for (const range of macroContextRanges) {
+    const clippedStart = range.start < start ? start : range.start;
+    const clippedEnd = range.end > end ? end : range.end;
+    if (clippedEnd <= start || clippedStart >= end || clippedStart >= clippedEnd) continue;
+    const x1 = xForDate(clippedStart, dates);
+    const x2 = xForDate(clippedEnd, dates);
+    bands.push({
+      ...range,
+      x: x1,
+      width: Math.max(2, x2 - x1),
+    });
+  }
+  return bands;
+}
+
+function scoreDeltaOverWindow(values: Array<number | null>, dates: string[], months = 1) {
+  const paired = values
+    .map((value, index) => ({ value, date: dates[index] }))
+    .filter((point): point is { value: number; date: string } => (
+      point.value != null && Number.isFinite(point.value) && Boolean(point.date)
+    ));
+  if (paired.length < 2) return null;
+
+  const latest = paired[paired.length - 1];
+  const target = new Date(`${latest.date}T00:00:00Z`);
+  target.setUTCMonth(target.getUTCMonth() - months);
+  const targetDate = target.toISOString().slice(0, 10);
+  const prior = paired.filter((point) => point.date <= targetDate).at(-1) ?? paired[paired.length - 2];
+
+  return latest.value - prior.value;
+}
+
 const latestSubscoreBySlug = new Map(latestSubscores.map((s) => [s.slug, s]));
 const referenceDate = latestDateString([
   headline?.score_date,
@@ -350,6 +413,7 @@ const cards = scored.map((indicator) => {
     ? normalizedRawSparkline[normalizedRawSparkline.length - 1] - normalizedRawSparkline[normalizedRawSparkline.length - 2]
     : null;
   const score = indicator.latest_score;
+  const scoreMove = scoreDeltaOverWindow(indicator.score_sparkline, indicator.score_sparkline_dates);
   const status = statusFor(score);
   return {
     slug: indicator.slug,
@@ -363,6 +427,8 @@ const cards = scored.map((indicator) => {
     lclLabel: lclLabel(indicator.lcl_class),
     score,
     scoreText: score == null ? '-' : String(Math.round(score)),
+    scoreDelta: scoreMove,
+    scoreDeltaText: formatScoreDelta(scoreMove),
     status,
     value,
     valueText: formatValue(value, indicator.unit),
@@ -458,6 +524,8 @@ const divergence = hardScore != null && softScore != null ? hardScore - softScor
 const divergenceAbs = divergence == null ? null : Math.abs(divergence);
 const hardStatus = statusFor(hardScore);
 const softStatus = statusFor(softScore);
+const hardScoreText = hardScore == null ? '-' : String(Math.round(hardScore));
+const softScoreText = softScore == null ? '-' : String(Math.round(softScore));
 
 const componentScore = weightedGroupScore();
 const headlineScore = componentScore ?? headline?.score ?? null;
@@ -470,6 +538,7 @@ const headlineTimeline = selectTimeline(
 );
 const headlineRawScores = [...headlineTimeline.values];
 const headlineDates = headlineTimeline.dates;
+const macroBands = buildMacroBands(headlineDates);
 const scoreMismatch = headline?.score != null && componentScore != null && Math.abs(headline.score - componentScore) > 1;
 if (scoreMismatch && headlineRawScores.length > 0 && headlineScore != null) {
   headlineRawScores[headlineRawScores.length - 1] = headlineScore;
@@ -490,6 +559,65 @@ const headlineWindowLabel = headlineTimeline.label;
 const headlineMidLabel = headlineDates.length > 2
   ? formatAxisDate(headlineDates[Math.floor((headlineDates.length - 1) / 2)])
   : '';
+const signalStack = [
+  {
+    label: 'Composite',
+    scoreText: headlineScoreText,
+    status: headlineStatus,
+    description: 'Weighted read across all seven sub-scores.',
+  },
+  {
+    label: 'Hard data',
+    scoreText: hardScoreText,
+    status: hardStatus,
+    description: 'Labor, spending, balance sheet, and credit stress.',
+  },
+  {
+    label: 'Soft data',
+    scoreText: softScoreText,
+    status: softStatus,
+    description: 'Sentiment, expectations, and household outlook surveys.',
+  },
+];
+const indicatorMovers = cards
+  .filter((card) => card.scoreDelta != null && Number.isFinite(card.scoreDelta))
+  .sort((a, b) => (b.scoreDelta ?? 0) - (a.scoreDelta ?? 0));
+const biggestGains = indicatorMovers.filter((card) => (card.scoreDelta ?? 0) > 0).slice(0, 3);
+const biggestDrops = indicatorMovers
+  .filter((card) => (card.scoreDelta ?? 0) < 0)
+  .sort((a, b) => (a.scoreDelta ?? 0) - (b.scoreDelta ?? 0))
+  .slice(0, 3);
+const subscoreMovers = groups
+  .map((group) => {
+    const history = subscoreHistoryBySlug[group.slug] ?? [];
+    const move = scoreDeltaOverWindow(
+      history.map((row) => row.score),
+      history.map((row) => row.score_date),
+    );
+    return { ...group, scoreDelta: move, scoreDeltaText: formatScoreDelta(move) };
+  })
+  .filter((group) => group.scoreDelta != null && Number.isFinite(group.scoreDelta))
+  .sort((a, b) => Math.abs(b.scoreDelta ?? 0) - Math.abs(a.scoreDelta ?? 0));
+const topSubscoreMove = subscoreMovers[0] ?? null;
+const headlineMove = headline?.delta_1m ?? null;
+const headlineMovePhrase = headlineMove == null
+  ? 'Latest updates are mixed'
+  : headlineMove > 0.5
+    ? 'The composite improved'
+    : headlineMove < -0.5
+      ? 'The composite weakened'
+      : 'The composite was little changed';
+const gainLeader = biggestGains[0] ?? null;
+const dropLeader = biggestDrops[0] ?? null;
+const changeTakeaway = `${headlineMovePhrase} on the latest monthly read. ${
+  dropLeader && gainLeader
+    ? `${dropLeader.label} is the largest drag, while ${gainLeader.label} is the biggest offset.`
+    : dropLeader
+      ? `${dropLeader.label} is the largest visible drag.`
+      : gainLeader
+        ? `${gainLeader.label} is the largest visible positive contributor.`
+        : 'No large indicator-level contribution stands out yet.'
+} ${topSubscoreMove ? `${topSubscoreMove.label} had the largest sub-score move.` : ''}`;
 const yearChangeText = headline?.delta_12m == null
   ? 'year-over-year momentum is not available yet'
   : headline.delta_12m < 0
@@ -553,6 +681,9 @@ const consumerSummary = headlineScore == null
               <span style={`--legend: ${headlineStatus.color}`}><i></i>Composite</span>
               <span class="dashed" style={`--legend: ${hardStatus.color}`}><i></i>Hard data</span>
               <span class="dashed" style={`--legend: ${softStatus.color}`}><i></i>Soft data</span>
+              <span class="band" style="--legend: #c05f2a"><i></i>Fed hiking</span>
+              <span class="band" style="--legend: #1a7c3e"><i></i>Fed easing</span>
+              <span class="band" style="--legend: #7a8290"><i></i>NBER recession</span>
             </div>
             <svg viewBox="0 0 460 150" role="img" aria-label={`Composite score history from ${headlineRangeLabel}`}>
               <defs>
@@ -561,11 +692,19 @@ const consumerSummary = headlineScore == null
                   <stop offset="100%" stop-color={headlineStatus.color} stop-opacity="0" />
                 </linearGradient>
               </defs>
-              {chartScale.ticks.map((tick) => {
+              {macroBands.map((band) => (
+                <g>
+                  <rect class={`macro-band ${band.type}`} x={band.x} y="6" width={band.width} height="118" />
+                  {band.width > 54 && (
+                    <text class="macro-band-label" x={band.x + band.width / 2} y="18" text-anchor="middle">{band.label}</text>
+                  )}
+                </g>
+              ))}
+              {chartScale.ticks.map((tick, index) => {
                 const y = 6 + (1 - (tick - chartScale.min) / (chartScale.max - chartScale.min || 1)) * 118;
                 return (
                   <g>
-                    <line x1="30" x2="430" y1={y} y2={y} stroke="#e6e3da" stroke-dasharray={tick === 50 ? '0' : '2 4'} />
+                    <line x1="30" x2="430" y1={y} y2={y} stroke="#e6e3da" stroke-dasharray={index === 1 ? '0' : '2 4'} />
                     <text x="22" y={y + 3} text-anchor="end">{formatChartTick(tick)}</text>
                   </g>
                 );
@@ -595,6 +734,74 @@ const consumerSummary = headlineScore == null
           <div class="composite-empty">Composite history will appear after ingestion runs.</div>
         )}
       </div>
+    </section>
+
+    <section class="insight-board" aria-label="Consumer signal framework and latest changes">
+      <article class="signal-framework">
+        <div class="eyebrow">Core Framework</div>
+        <h2>Composite, hard data, and soft data now travel together.</h2>
+        <div class="signal-stack">
+          {signalStack.map((signal) => (
+            <div class="signal-row" style={`--signal: ${signal.status.color}`}>
+              <div>
+                <span>{signal.label}</span>
+                <p>{signal.description}</p>
+              </div>
+              <strong>{signal.scoreText}</strong>
+              <em>{signal.status.label}</em>
+            </div>
+          ))}
+        </div>
+      </article>
+
+      <article class="change-panel">
+        <div class="change-head">
+          <div>
+            <div class="eyebrow">What Changed This Month</div>
+            <h2>{headlineMovePhrase}</h2>
+          </div>
+          <strong class={headlineMove != null && headlineMove < 0 ? 'delta-bad' : ''}>{formatScoreDelta(headlineMove)}</strong>
+        </div>
+        <p class="change-takeaway">{changeTakeaway}</p>
+        <div class="change-grid">
+          <div>
+            <span>Biggest gains</span>
+            <ul>
+              {biggestGains.length > 0 ? biggestGains.map((card) => (
+                <li>
+                  <i></i>
+                  <b>{card.label}</b>
+                  <em>{card.scoreDeltaText}</em>
+                </li>
+              )) : <li class="muted">No positive movers yet</li>}
+            </ul>
+          </div>
+          <div>
+            <span>Biggest drags</span>
+            <ul>
+              {biggestDrops.length > 0 ? biggestDrops.map((card) => (
+                <li>
+                  <i></i>
+                  <b>{card.label}</b>
+                  <em>{card.scoreDeltaText}</em>
+                </li>
+              )) : <li class="muted">No negative movers yet</li>}
+            </ul>
+          </div>
+          <div>
+            <span>Sub-score move</span>
+            {topSubscoreMove ? (
+              <div class="subscore-move" style={`--signal: ${topSubscoreMove.status.color}`}>
+                <b>{topSubscoreMove.label}</b>
+                <strong>{topSubscoreMove.scoreDeltaText}</strong>
+                <em>{topSubscoreMove.status.label}</em>
+              </div>
+            ) : (
+              <div class="subscore-move muted">Pending</div>
+            )}
+          </div>
+        </div>
+      </article>
     </section>
 
     <div class="filter-strip" data-filter-bar>
@@ -934,6 +1141,36 @@ const consumerSummary = headlineScore == null
     background: transparent;
   }
 
+  .chart-legend .band i {
+    width: 15px;
+    height: 8px;
+    background: var(--legend);
+    opacity: 0.22;
+  }
+
+  .macro-band {
+    opacity: 0.08;
+  }
+
+  .macro-band.recession {
+    fill: #7a8290;
+  }
+
+  .macro-band.hiking {
+    fill: #c05f2a;
+  }
+
+  .macro-band.easing {
+    fill: #1a7c3e;
+  }
+
+  .macro-band-label {
+    fill: rgba(14, 17, 22, 0.48);
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 7px;
+    text-transform: uppercase;
+  }
+
   .composite-history svg {
     width: 100%;
     height: auto;
@@ -946,11 +1183,209 @@ const consumerSummary = headlineScore == null
     font-size: 9px;
   }
 
+  .composite-history text.macro-band-label {
+    fill: rgba(14, 17, 22, 0.48);
+    font-size: 7px;
+  }
+
   .composite-empty {
     margin-top: 28px;
     color: var(--muted);
     border-top: 1px solid var(--hairline);
     padding-top: 20px;
+    font-size: 14px;
+  }
+
+  .insight-board {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 56px 32px;
+    display: grid;
+    grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.1fr);
+    gap: 24px;
+  }
+
+  .signal-framework,
+  .change-panel {
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    padding: 24px;
+  }
+
+  .signal-framework h2,
+  .change-head h2 {
+    margin: 8px 0 0;
+    color: var(--ink);
+    font-size: 28px;
+    line-height: 1.12;
+    font-weight: 500;
+  }
+
+  .signal-stack {
+    margin-top: 24px;
+    display: grid;
+    gap: 0;
+  }
+
+  .signal-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: end;
+    border-top: 1px solid var(--hairline);
+    padding: 16px 0;
+  }
+
+  .signal-row:last-child {
+    padding-bottom: 0;
+  }
+
+  .signal-row span,
+  .change-grid > div > span {
+    display: block;
+    color: var(--muted);
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+  }
+
+  .signal-row p {
+    margin: 7px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .signal-row strong {
+    color: var(--ink);
+    font-size: 34px;
+    line-height: 1;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .signal-row em {
+    grid-column: 2;
+    color: var(--signal);
+    font-style: normal;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: right;
+    text-transform: uppercase;
+  }
+
+  .change-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .change-head strong {
+    color: #1a7c3e;
+    font-size: 30px;
+    line-height: 1;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .change-takeaway {
+    margin: 18px 0 0;
+    color: var(--ink-2);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .change-grid {
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    border-top: 1px solid var(--hairline);
+    padding-top: 18px;
+  }
+
+  .change-grid ul {
+    list-style: none;
+    margin: 12px 0 0;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+  }
+
+  .change-grid li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: baseline;
+    color: var(--ink);
+    font-size: 13px;
+  }
+
+  .change-grid li i {
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+
+  .change-grid > div:nth-child(1) li {
+    color: #1a7c3e;
+  }
+
+  .change-grid > div:nth-child(2) li {
+    color: #b83a32;
+  }
+
+  .change-grid li b {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+
+  .change-grid li em,
+  .subscore-move em {
+    color: var(--muted);
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 10px;
+    font-style: normal;
+    text-transform: uppercase;
+  }
+
+  .change-grid li:first-child em {
+    color: inherit;
+  }
+
+  .change-grid li.muted {
+    display: block;
+    color: var(--muted);
+  }
+
+  .subscore-move {
+    margin-top: 12px;
+    display: grid;
+    gap: 7px;
+  }
+
+  .subscore-move b {
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .subscore-move strong {
+    color: var(--signal);
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .subscore-move.muted {
+    color: var(--muted);
     font-size: 14px;
   }
 
@@ -1409,6 +1844,10 @@ const consumerSummary = headlineScore == null
       align-items: start;
     }
 
+    .insight-board {
+      grid-template-columns: 1fr;
+    }
+
     .hero-copy h1 {
       font-size: 56px;
       max-width: 760px;
@@ -1421,6 +1860,7 @@ const consumerSummary = headlineScore == null
 
   @media (max-width: 820px) {
     .indicators-hero,
+    .insight-board,
     .filter-strip,
     .indicator-groups,
     .empty-state {
@@ -1458,6 +1898,10 @@ const consumerSummary = headlineScore == null
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .change-grid {
+      grid-template-columns: 1fr;
+    }
+
     .drawer-panel {
       padding: 32px 24px;
     }
@@ -1479,6 +1923,24 @@ const consumerSummary = headlineScore == null
     .composite-deltas {
       margin-top: 24px;
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .change-head {
+      display: block;
+    }
+
+    .change-head strong {
+      display: block;
+      margin-top: 14px;
+    }
+
+    .signal-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .signal-row em {
+      grid-column: 1;
+      text-align: left;
     }
 
     .indicator-card {
