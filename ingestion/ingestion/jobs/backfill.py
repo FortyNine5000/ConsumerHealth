@@ -27,10 +27,15 @@ from ingestion.db import (
     get_all_indicators,
     get_observations_df,
     log_update,
+    upsert_consumer_weakness_monitor,
     upsert_headline_scores,
+    upsert_headline_signal_components,
     upsert_indicator_scores,
+    upsert_indicator_signal_components,
+    upsert_subscore_signal_components,
     upsert_subscores,
 )
+from ingestion.reports.monthly_monitor import build_consumer_weakness_monitor
 from ingestion.seed_indicators import seed as seed_indicators
 from ingestion.sources import bea, bls, eia, fred, nyfed_hhdc
 from ingestion.transforms.percentile import (
@@ -49,6 +54,11 @@ from ingestion.transforms.scoring import (
     compute_subscore,
     score_to_band,
 )
+from ingestion.transforms.signals import (
+    aggregate_headline_signal_components,
+    aggregate_subscore_signal_components,
+    compute_indicator_signal_components,
+)
 from ingestion.transforms.validate import (
     validate_backtest_recession_drops,
     validate_headline,
@@ -58,6 +68,24 @@ from ingestion.transforms.validate import (
 log = structlog.get_logger(__name__)
 
 BACKFILL_START = "1985-01-01"  # fetch a bit before 1990 so YoY transforms are meaningful
+
+
+def _clean_records(df: pd.DataFrame) -> list[dict]:
+    """Convert a DataFrame into DB-safe records with Python scalars and nulls."""
+    records: list[dict] = []
+    for raw in df.to_dict("records"):
+        record = {}
+        for key, value in raw.items():
+            if value is None or pd.isna(value):
+                record[key] = None
+            elif isinstance(value, np.integer):
+                record[key] = int(value)
+            elif isinstance(value, np.floating):
+                record[key] = float(value)
+            else:
+                record[key] = value
+        records.append(record)
+    return records
 
 
 async def _score_all_indicators(
@@ -180,6 +208,7 @@ def _get_transform(slug: str):
 async def _compute_subscores_and_headline(
     client: TursoClient,
     all_scores_df: pd.DataFrame,
+    indicators: list[dict] | None = None,
 ) -> None:
     """Aggregate indicator scores into sub-scores and headline for all dates."""
     if all_scores_df.empty:
@@ -243,6 +272,54 @@ async def _compute_subscores_and_headline(
         await upsert_headline_scores(client, headline_rows)
         log.info("headline.upserted", rows=len(headline_rows))
 
+    # Compute and persist v2 research components without changing the public headline.
+    indicators = indicators or await get_all_indicators(client, scored_only=False)
+    slug_to_id = {str(ind["slug"]): int(ind["id"]) for ind in indicators}
+    indicator_meta = {str(ind["slug"]): ind for ind in indicators}
+
+    indicator_components = compute_indicator_signal_components(score_panel)
+    indicator_records = []
+    for record in _clean_records(indicator_components):
+        indicator_id = slug_to_id.get(str(record["indicator_slug"]))
+        if indicator_id is None:
+            continue
+        indicator_records.append({**record, "indicator_id": indicator_id})
+    if indicator_records:
+        await upsert_indicator_signal_components(client, indicator_records)
+        log.info("signal_components.indicator.upserted", rows=len(indicator_records))
+
+    subscore_components = aggregate_subscore_signal_components(
+        indicator_components,
+        SUBSCORE_CONFIG,
+    )
+    subscore_records = _clean_records(subscore_components)
+    if subscore_records:
+        await upsert_subscore_signal_components(client, subscore_records)
+        log.info("signal_components.subscore.upserted", rows=len(subscore_records))
+
+    headline_signal_components = aggregate_headline_signal_components(
+        subscore_components,
+        SUBSCORE_CONFIG,
+    )
+    headline_signal_records = _clean_records(headline_signal_components)
+    if headline_signal_records:
+        await upsert_headline_signal_components(client, headline_signal_records)
+        log.info("signal_components.headline.upserted", rows=len(headline_signal_records))
+
+    if headline_rows and headline_signal_records:
+        latest_date = max(row["score_date"] for row in headline_rows)
+        monitor = build_consumer_weakness_monitor(
+            latest_date,
+            pd.DataFrame(headline_rows),
+            headline_signal_components,
+            subscore_components,
+            indicator_components,
+            indicator_meta=indicator_meta,
+        )
+        if monitor:
+            await upsert_consumer_weakness_monitor(client, monitor)
+            log.info("consumer_weakness_monitor.upserted", score_date=latest_date)
+
     # Back-test validation
     if headline_rows:
         warnings = validate_backtest_recession_drops(headline_df)
@@ -297,7 +374,7 @@ async def run() -> None:
 
         # 8. Compute sub-scores and headline for all dates
         log.info("backfill.aggregate.start")
-        await _compute_subscores_and_headline(client, all_scores_df)
+        await _compute_subscores_and_headline(client, all_scores_df, indicators=indicators)
         log.info("backfill.aggregate.ok")
 
         # 9. Log success

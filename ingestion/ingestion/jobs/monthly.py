@@ -84,7 +84,7 @@ async def run() -> None:
         all_scores_df = await _score_all_indicators(client, indicators)
 
         # Recompute sub-scores and headline
-        await _compute_subscores_and_headline(client, all_scores_df)
+        await _compute_subscores_and_headline(client, all_scores_df, indicators=indicators)
 
         # Trigger Cloudflare deploy
         await trigger_deploy()

@@ -52,6 +52,7 @@ ingest-weekly    = "ingestion.jobs.weekly:main"
 ingest-monthly   = "ingestion.jobs.monthly:main"
 ingest-quarterly = "ingestion.jobs.quarterly:main"
 ingest-backfill  = "ingestion.jobs.backfill:main"
+backtest-signals = "ingestion.analytics.backtest:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["ingestion"]

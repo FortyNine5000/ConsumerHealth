@@ -41,6 +41,22 @@ Before changing the headline formula, v1 needs two mechanical corrections:
 
 Perplexity's suggested 40% state / 40% short change / 20% medium trend is a useful aggressive candidate, but likely too twitchy for the public headline score. It should be tested as a "turning-point" or "risk" variant against more stable mixes such as 60/25/15 and 55/30/15.
 
+## Current implementation status
+
+The production headline remains the v1 state score. The ingestion pipeline now also writes a research layer for validation:
+
+- `indicator_signal_components`: state score, 3-month momentum score, 3-vs-12-month trend score, stable v2 score, turning-point score, and staleness metadata by indicator.
+- `subscore_signal_components`: the same component stack aggregated to the seven public sub-scores.
+- `headline_signal_components`: headline-level stable v2 and turning-point candidates.
+- `consumer_weakness_monitors`: latest deterministic Consumer Weakness Monitor draft with top weakening indicators and weakest subscore momentum.
+
+The default candidate mixes are:
+
+- Stable v2: 60% state, 25% short momentum, 15% medium trend.
+- Turning point: 40% state, 40% short momentum, 20% medium trend.
+
+Run `backtest-signals --output docs/validation-report.md` after a populated backfill to compare v1, stable v2, and turning-point scores against forward outcomes and known recession drawdowns.
+
 ## Indicator-level design
 
 For each scored indicator, keep these fields conceptually distinct:
@@ -99,12 +115,12 @@ Recommended publishable metrics:
 
 ## Suggested implementation order
 
-1. Add pure Python helper functions for momentum and trend scores with unit tests.
-2. Generate state, momentum, and trend components for every indicator without changing the headline score.
-3. Store the components in a new table or JSON column and expose them on indicator pages.
-4. Build a backtest script comparing v1 against candidate v2 mixes.
-5. Publish a validation report under `docs/` and link it from `/methodology`.
-6. Switch the headline only after selecting the best candidate mix.
+1. Done: add pure Python helper functions for momentum and trend scores with unit tests.
+2. Done: generate state, momentum, and trend components for every indicator without changing the headline score.
+3. Done: store the components in dedicated research tables.
+4. Done: build a backtest script comparing v1 against candidate v2 mixes.
+5. Next: run the backtest on populated production data and publish a validation report under `docs/`.
+6. Later: expose components on indicator pages and switch the headline only after selecting the best candidate mix.
 
 ## Open choices
 

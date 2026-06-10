@@ -351,6 +351,182 @@ async def upsert_headline_scores(client: TursoClient, rows: list[dict]) -> int:
     return len(rows)
 
 
+async def upsert_indicator_signal_components(
+    client: TursoClient,
+    rows: list[dict],
+) -> int:
+    if not rows:
+        return 0
+    stmts = [
+        Statement(
+            """
+            INSERT INTO indicator_signal_components
+                (indicator_id, score_date, state_score, momentum_score, trend_score,
+                 stable_v2_score, turning_point_score, short_delta, trend_delta,
+                 frequency, source_score_date, months_stale)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(indicator_id, score_date) DO UPDATE SET
+                state_score         = excluded.state_score,
+                momentum_score      = excluded.momentum_score,
+                trend_score         = excluded.trend_score,
+                stable_v2_score     = excluded.stable_v2_score,
+                turning_point_score = excluded.turning_point_score,
+                short_delta         = excluded.short_delta,
+                trend_delta         = excluded.trend_delta,
+                frequency           = excluded.frequency,
+                source_score_date   = excluded.source_score_date,
+                months_stale        = excluded.months_stale,
+                computed_at         = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+            """,
+            [
+                r["indicator_id"],
+                r["score_date"],
+                r.get("state_score"),
+                r.get("momentum_score"),
+                r.get("trend_score"),
+                r.get("stable_v2_score"),
+                r.get("turning_point_score"),
+                r.get("short_delta"),
+                r.get("trend_delta"),
+                r.get("frequency"),
+                r.get("source_score_date"),
+                r.get("months_stale"),
+            ],
+        )
+        for r in rows
+    ]
+    chunk_size = 500
+    for i in range(0, len(stmts), chunk_size):
+        await client.batch(stmts[i : i + chunk_size])
+    return len(rows)
+
+
+async def upsert_subscore_signal_components(
+    client: TursoClient,
+    rows: list[dict],
+) -> int:
+    if not rows:
+        return 0
+    stmts = [
+        Statement(
+            """
+            INSERT INTO subscore_signal_components
+                (slug, score_date, state_score, momentum_score, trend_score,
+                 stable_v2_score, turning_point_score, weakening_count)
+            VALUES (?,?,?,?,?,?,?,?)
+            ON CONFLICT(slug, score_date) DO UPDATE SET
+                state_score         = excluded.state_score,
+                momentum_score      = excluded.momentum_score,
+                trend_score         = excluded.trend_score,
+                stable_v2_score     = excluded.stable_v2_score,
+                turning_point_score = excluded.turning_point_score,
+                weakening_count     = excluded.weakening_count,
+                computed_at         = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+            """,
+            [
+                r["slug"],
+                r["score_date"],
+                r.get("state_score"),
+                r.get("momentum_score"),
+                r.get("trend_score"),
+                r.get("stable_v2_score"),
+                r.get("turning_point_score"),
+                r.get("weakening_count", 0),
+            ],
+        )
+        for r in rows
+    ]
+    chunk_size = 500
+    for i in range(0, len(stmts), chunk_size):
+        await client.batch(stmts[i : i + chunk_size])
+    return len(rows)
+
+
+async def upsert_headline_signal_components(
+    client: TursoClient,
+    rows: list[dict],
+) -> int:
+    if not rows:
+        return 0
+    stmts = [
+        Statement(
+            """
+            INSERT INTO headline_signal_components
+                (score_date, state_score, momentum_score, trend_score,
+                 stable_v2_score, turning_point_score, weakening_count)
+            VALUES (?,?,?,?,?,?,?)
+            ON CONFLICT(score_date) DO UPDATE SET
+                state_score         = excluded.state_score,
+                momentum_score      = excluded.momentum_score,
+                trend_score         = excluded.trend_score,
+                stable_v2_score     = excluded.stable_v2_score,
+                turning_point_score = excluded.turning_point_score,
+                weakening_count     = excluded.weakening_count,
+                computed_at         = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+            """,
+            [
+                r["score_date"],
+                r.get("state_score"),
+                r.get("momentum_score"),
+                r.get("trend_score"),
+                r.get("stable_v2_score"),
+                r.get("turning_point_score"),
+                r.get("weakening_count", 0),
+            ],
+        )
+        for r in rows
+    ]
+    chunk_size = 500
+    for i in range(0, len(stmts), chunk_size):
+        await client.batch(stmts[i : i + chunk_size])
+    return len(rows)
+
+
+async def upsert_consumer_weakness_monitor(
+    client: TursoClient,
+    report: dict,
+) -> int:
+    await client.execute(
+        Statement(
+            """
+            INSERT INTO consumer_weakness_monitors
+                (score_date, slug, headline, stance, headline_score, stable_v2_score,
+                 turning_point_score, momentum_score, trend_score,
+                 top_weakening_indicators, top_weak_subscores, summary_md)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(score_date) DO UPDATE SET
+                slug                     = excluded.slug,
+                headline                 = excluded.headline,
+                stance                   = excluded.stance,
+                headline_score           = excluded.headline_score,
+                stable_v2_score          = excluded.stable_v2_score,
+                turning_point_score      = excluded.turning_point_score,
+                momentum_score           = excluded.momentum_score,
+                trend_score              = excluded.trend_score,
+                top_weakening_indicators = excluded.top_weakening_indicators,
+                top_weak_subscores       = excluded.top_weak_subscores,
+                summary_md               = excluded.summary_md,
+                updated_at               = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+            """,
+            [
+                report["score_date"],
+                report["slug"],
+                report["headline"],
+                report["stance"],
+                report.get("headline_score"),
+                report.get("stable_v2_score"),
+                report.get("turning_point_score"),
+                report.get("momentum_score"),
+                report.get("trend_score"),
+                json.dumps(report.get("top_weakening_indicators", [])),
+                json.dumps(report.get("top_weak_subscores", [])),
+                report.get("summary_md"),
+            ],
+        )
+    )
+    return 1
+
+
 async def get_observations_df(
     client: TursoClient,
     indicator_id: int,

@@ -208,8 +208,16 @@ def build_monthly_score_panel(all_scores_df: pd.DataFrame) -> pd.DataFrame:
     for a limited freshness window. This prevents a partial current month from
     re-normalizing the headline around only the fastest-updating series.
     """
+    columns = [
+        "indicator_slug",
+        "score_date",
+        "smoothed_score",
+        "frequency",
+        "source_score_date",
+        "months_stale",
+    ]
     if all_scores_df.empty:
-        return pd.DataFrame(columns=["indicator_slug", "score_date", "smoothed_score", "frequency"])
+        return pd.DataFrame(columns=columns)
 
     df = all_scores_df.copy()
     if "frequency" not in df.columns:
@@ -217,7 +225,7 @@ def build_monthly_score_panel(all_scores_df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.dropna(subset=["indicator_slug", "score_date", "smoothed_score"])
     if df.empty:
-        return pd.DataFrame(columns=["indicator_slug", "score_date", "smoothed_score", "frequency"])
+        return pd.DataFrame(columns=columns)
 
     df["score_date"] = pd.to_datetime(df["score_date"]).dt.to_period("M").dt.start_time
     df = df.sort_values(["indicator_slug", "score_date"])
@@ -236,14 +244,22 @@ def build_monthly_score_panel(all_scores_df: pd.DataFrame) -> pd.DataFrame:
         monthly = series.reindex(monthly_index).ffill(limit=limit).dropna()
         if monthly.empty:
             continue
+        source_dates = pd.Series(series.index, index=series.index)
+        source_dates = source_dates.reindex(monthly_index).ffill(limit=limit).loc[monthly.index]
         panel = monthly.rename("smoothed_score").reset_index().rename(columns={"index": "score_date"})
         panel["indicator_slug"] = indicator_slug
         panel["frequency"] = frequency
+        panel["source_score_date"] = source_dates.to_numpy()
+        panel["months_stale"] = (
+            (panel["score_date"].dt.year - pd.to_datetime(panel["source_score_date"]).dt.year) * 12
+            + (panel["score_date"].dt.month - pd.to_datetime(panel["source_score_date"]).dt.month)
+        )
         panel["score_date"] = panel["score_date"].dt.strftime("%Y-%m-%d")
-        panels.append(panel[["indicator_slug", "score_date", "smoothed_score", "frequency"]])
+        panel["source_score_date"] = pd.to_datetime(panel["source_score_date"]).dt.strftime("%Y-%m-%d")
+        panels.append(panel[columns])
 
     if not panels:
-        return pd.DataFrame(columns=["indicator_slug", "score_date", "smoothed_score", "frequency"])
+        return pd.DataFrame(columns=columns)
 
     return pd.concat(panels, ignore_index=True)
 

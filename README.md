@@ -98,7 +98,23 @@ cd ingestion
 pytest tests/
 ```
 
-### 5. Run the Web App
+### 5. Backtest Signal Candidates
+
+After the database has a historical backfill, compare the production v1 score
+against the stable v2 and turning-point research candidates:
+
+```bash
+cd ingestion
+backtest-signals --output ../docs/validation-report.md
+```
+
+The backtest reads `headline_scores`, `headline_signal_components`, and selected
+outcome indicators to measure forward outcome fit, warning hit rate, false
+warnings, and recession drawdowns. Normal scoring jobs also refresh
+`consumer_weakness_monitors`, which stores the latest deterministic monthly
+Consumer Weakness Monitor draft.
+
+### 6. Run the Web App
 
 ```bash
 cd apps/web

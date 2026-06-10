@@ -64,7 +64,7 @@ async def run() -> None:
         # Re-score affected indicators
         indicators = await get_all_indicators(client, scored_only=False)
         all_scores_df = await _score_all_indicators(client, indicators)
-        await _compute_subscores_and_headline(client, all_scores_df)
+        await _compute_subscores_and_headline(client, all_scores_df, indicators=indicators)
 
         finished_at = datetime.datetime.utcnow().isoformat() + "Z"
         await log_update(

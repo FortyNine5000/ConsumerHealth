@@ -76,6 +76,61 @@ CREATE TABLE IF NOT EXISTS indicator_scores (
 CREATE INDEX IF NOT EXISTS idx_scores_indicator_date
     ON indicator_scores(indicator_id, score_date DESC);
 
+-- ── signal components ────────────────────────────────────────────────────────
+-- V2 research layer. These rows do not replace the production headline score;
+-- they let us validate state / momentum / trend candidates before shipping.
+CREATE TABLE IF NOT EXISTS indicator_signal_components (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    indicator_id        INTEGER NOT NULL REFERENCES indicators(id),
+    score_date          TEXT    NOT NULL,
+    state_score         REAL,
+    momentum_score      REAL,
+    trend_score         REAL,
+    stable_v2_score     REAL,
+    turning_point_score REAL,
+    short_delta         REAL,
+    trend_delta         REAL,
+    frequency           TEXT,
+    source_score_date   TEXT,
+    months_stale        INTEGER,
+    computed_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE (indicator_id, score_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_indicator_signal_components_date
+    ON indicator_signal_components(score_date DESC);
+CREATE INDEX IF NOT EXISTS idx_indicator_signal_components_indicator_date
+    ON indicator_signal_components(indicator_id, score_date DESC);
+
+CREATE TABLE IF NOT EXISTS subscore_signal_components (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug                TEXT    NOT NULL,
+    score_date          TEXT    NOT NULL,
+    state_score         REAL,
+    momentum_score      REAL,
+    trend_score         REAL,
+    stable_v2_score     REAL,
+    turning_point_score REAL,
+    weakening_count     INTEGER NOT NULL DEFAULT 0,
+    computed_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    UNIQUE (slug, score_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscore_signal_components_slug_date
+    ON subscore_signal_components(slug, score_date DESC);
+
+CREATE TABLE IF NOT EXISTS headline_signal_components (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    score_date          TEXT    NOT NULL UNIQUE,
+    state_score         REAL,
+    momentum_score      REAL,
+    trend_score         REAL,
+    stable_v2_score     REAL,
+    turning_point_score REAL,
+    weakening_count     INTEGER NOT NULL DEFAULT 0,
+    computed_at         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
 -- ── subscores ─────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS subscores (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -159,6 +214,25 @@ CREATE TABLE IF NOT EXISTS monthly_reports (
     ai_draft_md          TEXT,
     newsletter_sent      INTEGER NOT NULL DEFAULT 0,
     created_at           TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- ── consumer weakness monitor drafts ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS consumer_weakness_monitors (
+    id                         INTEGER PRIMARY KEY AUTOINCREMENT,
+    score_date                 TEXT    NOT NULL UNIQUE,
+    slug                       TEXT    NOT NULL UNIQUE,
+    headline                   TEXT    NOT NULL,
+    stance                     TEXT    NOT NULL,
+    headline_score             REAL,
+    stable_v2_score            REAL,
+    turning_point_score        REAL,
+    momentum_score             REAL,
+    trend_score                REAL,
+    top_weakening_indicators   TEXT,
+    top_weak_subscores         TEXT,
+    summary_md                 TEXT,
+    created_at                 TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at                 TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
 -- ── updates (job audit log) ───────────────────────────────────────────────────
